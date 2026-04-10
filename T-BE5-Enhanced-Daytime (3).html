@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>T-BE5 勇鷹 地面輔助訓練系統 v3.0</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+        :root {
+            --hud: #00ff88;
+            --hud-dim: #00aa55;
+            --hud-dark: #003322;
+            --warn: #ff4400;
+            --caution: #ffaa00;
+            --bg: #050807;
+            --panel: #080e0b;
+            --border: #1a2e22;
+            --sky-top: #3a8fcc;
+            --sky-bot: #a0ccee;
+            --ground: #6aaa44;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--hud);
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ──── SCANLINE OVERLAY ──── */
+        body::after {
+            content: '';
+            position: fixed; inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.08) 2px, rgba(0,0,0,0.08) 4px);
+            pointer-events: none; z-index: 9999;
+        }
+
+        /* ──── HEADER ──── */
+        #header {
+            height: 44px; flex-shrink: 0;
+            background: #020403;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center;
+            padding: 0 12px; gap: 16px;
+        }
+
+        .sys-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 11px; font-weight: 900;
+            letter-spacing: 4px;
+            color: var(--hud);
+        }
+
+        .sep { width: 1px; height: 24px; background: var(--border); }
+
+        .hdr-field { display: flex; flex-direction: column; }
+        .hdr-label { font-size: 8px; color: #556; letter-spacing: 2px; }
+        .hdr-val { font-size: 11px; color: #eee; }
+
+        #conn-status { font-size: 10px; font-weight: bold; letter-spacing: 2px; }
+        .status-ok   { color: var(--hud); }
+        .status-warn { color: var(--caution); }
+        .status-err  { color: var(--warn); }
+
+        #my-id-display { font-size: 9px; color: #4a8; letter-spacing: 1px; }
+
+        .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .hdr-input {
+            background: #000; border: 1px solid #1f4; color: #1f4;
+            padding: 4px 8px; font: 10px 'Share Tech Mono', monospace;
+            width: 180px; outline: none;
+        }
+        .hdr-btn {
+            background: transparent; border: 1px solid var(--hud);
+            color: var(--hud); padding: 4px 12px;
+            font: 10px 'Share Tech Mono', monospace;
+            cursor: pointer; letter-spacing: 2px;
+            transition: all .2s;
+        }
+        .hdr-btn:hover { background: var(--hud); color: #000; }
+
+        /* ──── MAIN LAYOUT ──── */
+        #main { flex: 1; display: flex; gap: 2px; overflow: hidden; padding: 2px; }
+
+        /* ──── LEFT PANEL ──── */
+        #left-panel {
+            width: 300px; flex-shrink: 0;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+
+        .mfd {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            position: relative; overflow: hidden;
+        }
+        .mfd-title {
+            background: #0a0f0c; border-bottom: 1px solid var(--border);
+            font-size: 9px; padding: 3px 8px;
+            letter-spacing: 3px; color: var(--hud-dim);
+            display: flex; justify-content: space-between;
+        }
+
+        /* TAD Map */
+        #map-wrap { flex: 1; min-height: 0; }
+        #map { width: 100%; height: 100%; }
+
+        /* Instructor Controls */
+        #instructor-wrap { flex-shrink: 0; }
+        .fault-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 6px; }
+        .fault-btn {
+            font: 9px 'Share Tech Mono'; padding: 6px 4px;
+            border: 1px solid; cursor: pointer;
+            letter-spacing: 1px; transition: all .15s;
+            text-align: center;
+        }
+        .fb-red    { border-color: #622; color: #f44; background: #1a0000; }
+        .fb-red:hover { background: #400; }
+        .fb-orange { border-color: #642; color: #fa0; background: #1a0a00; }
+        .fb-orange:hover { background: #310; }
+        .fb-blue   { border-color: #224; color: #44f; background: #00001a; }
+        .fb-blue:hover { background: #001130; }
+        .fb-yellow { border-color: #442; color: #ff0; background: #1a1500; }
+        .fb-yellow:hover { background: #220; }
+        .fb-gray   { border-color: #333; color: #aaa; background: #111; }
+        .fb-gray:hover { background: #222; }
+        .fb-green  { border-color: #262; color: #0f0; background: #001400; }
+        .fb-green:hover { background: #020; }
+
+        /* Mission setup */
+        .mission-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; font-size: 9px; border-bottom: 1px solid #111; }
+        .mission-select {
+            background: #000; border: 1px solid #1a2e22; color: var(--hud);
+            font: 9px 'Share Tech Mono'; padding: 2px 4px; outline: none;
+        }
+        .mission-input {
+            background: #000; border: 1px solid #1a2e22; color: var(--hud);
+            font: 9px 'Share Tech Mono'; width: 70px; padding: 2px 4px; outline: none;
+        }
+
+        /* Event Log */
+        #log-wrap { flex-shrink: 0; height: 130px; }
+        #event-log {
+            height: calc(100% - 26px); overflow-y: auto;
+            padding: 4px 8px; font-size: 8px; line-height: 1.6;
+            scroll-behavior: smooth;
+        }
+        #event-log::-webkit-scrollbar { width: 3px; }
+        #event-log::-webkit-scrollbar-thumb { background: var(--border); }
+        .log-ok   { color: var(--hud-dim); }
+        .log-warn { color: var(--caution); }
+        .log-crit { color: var(--warn); }
+        .log-info { color: #888; }
+
+        /* Telemetry */
+        #tele-wrap { flex-shrink: 0; }
+        .tele-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+        .tele-cell {
+            padding: 4px 8px; border-bottom: 1px solid #0d1610; border-right: 1px solid #0d1610;
+            font-size: 9px;
+        }
+        .tele-cell:nth-child(even) { border-right: none; }
+        .tele-val { font-size: 14px; color: #fff; font-family: 'Orbitron', monospace; }
+
+        /* Fuel bar */
+        .fuel-bar-wrap { padding: 6px 8px; }
+        .fuel-label { font-size: 8px; margin-bottom: 3px; display: flex; justify-content: space-between; }
+        .fuel-bar { height: 6px; background: #0a0f0c; border: 1px solid var(--border); }
+        .fuel-bar-fill { height: 100%; background: var(--hud); transition: width .5s, background .5s; }
+
+        /* ──── CENTER: 3D COCKPIT ──── */
+        #center { flex: 1; min-width: 0; position: relative; }
+        #three-canvas { position: absolute; inset: 0; }
+
+        /* Cockpit frame overlay */
+        #cockpit-frame {
+            position: absolute; inset: 0; pointer-events: none; z-index: 10;
+        }
+        #cockpit-frame svg { width: 100%; height: 100%; }
+
+        /* HUD overlay */
+        #hud-overlay {
+            position: absolute; inset: 0; pointer-events: none; z-index: 20;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 16px 20px;
+        }
+
+        /* Heading tape */
+        .hdg-tape-wrap {
+            display: flex; justify-content: center;
+        }
+        .hdg-tape-box {
+            border: 1px solid var(--hud); border-top: none;
+            padding: 2px 20px 4px;
+            position: relative; overflow: hidden; width: 180px;
+            text-align: center;
+        }
+        .hdg-val { font: bold 22px 'Orbitron', monospace; }
+        .hdg-sub { font-size: 9px; color: var(--hud-dim); letter-spacing: 3px; }
+
+        /* Speed + altitude tapes */
+        .tape-area { display: flex; justify-content: space-between; align-items: center; }
+
+        .tape-unit {
+            width: 64px; height: 220px;
+            position: relative;
+            border: 1px solid var(--hud);
+        }
+        .tape-scroll {
+            position: absolute; width: 100%;
+            font-size: 10px; text-align: right; padding-right: 4px;
+            color: var(--hud-dim);
+            transition: transform .08s linear;
+        }
+        .tape-scroll.alt-tape { text-align: left; padding-left: 4px; }
+        .tape-index {
+            position: absolute; inset: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,255,136,0.08);
+            border: 2px solid var(--hud);
+        }
+        .tape-bigval { font: bold 18px 'Orbitron', monospace; color: #fff; }
+
+        /* ADI */
+        .adi-wrap {
+            width: 160px; height: 160px;
+            position: relative;
+            border: 1px solid var(--hud);
+            overflow: hidden; border-radius: 2px;
+        }
+        .adi-horizon {
+            position: absolute; width: 200%; height: 200%;
+            top: -50%; left: -50%;
+            transition: transform .06s linear;
+        }
+        .adi-sky { width: 100%; height: 50%; background: #4da6e8; }
+        .adi-ground { width: 100%; height: 50%; background: #8b6914; }
+        .adi-horizon-line {
+            position: absolute; top: 50%; left: 0; right: 0;
+            height: 2px; background: white; margin-top: -1px;
+        }
+        /* pitch ladder lines on ADI */
+        .adi-pitch-line {
+            position: absolute; left: 25%; right: 25%;
+            height: 1px; background: rgba(255,255,255,0.6);
+        }
+        .adi-crosshair {
+            position: absolute; inset: 0; pointer-events: none;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .adi-crosshair::before {
+            content: '';
+            position: absolute; left: 15px; right: 15px; height: 2px; background: #ff0; top: 50%;
+        }
+        .adi-crosshair::after {
+            content: '';
+            position: absolute; left: 50%; top: 40%; bottom: 40%;
+            width: 2px; background: #ff0; margin-left: -1px;
+        }
+        .adi-bank-indicator {
+            position: absolute; bottom: 4px; left: 0; right: 0;
+            display: flex; justify-content: center;
+        }
+        .adi-bank-arrow {
+            width: 0; height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 10px solid #ff0;
+            transition: transform .06s linear;
+        }
+
+        /* VSI */
+        .vsi-wrap {
+            width: 44px; height: 220px;
+            border: 1px solid var(--hud);
+            display: flex; flex-direction: column; align-items: center;
+            position: relative; font-size: 8px; color: var(--hud-dim);
+        }
+        .vsi-needle {
+            position: absolute; left: 50%; width: 2px;
+            background: var(--hud); transform-origin: bottom center;
+            bottom: 50%; height: 40%;
+            transition: transform .1s linear;
+        }
+        .vsi-label { position: absolute; font-size: 8px; right: 2px; }
+
+        /* Engine gauges */
+        .eng-row {
+            display: flex; gap: 6px; justify-content: center;
+        }
+        .arc-gauge {
+            width: 70px; height: 70px; position: relative;
+        }
+        .arc-gauge canvas { width: 100%; height: 100%; }
+        .arc-label { text-align: center; font-size: 8px; color: var(--hud-dim); margin-top: 2px; }
+        .arc-val { text-align: center; font: bold 11px 'Orbitron'; margin-bottom: 2px; }
+
+        /* Bottom HUD bar */
+        .hud-bottom {
+            display: flex; justify-content: space-between; align-items: flex-end;
+        }
+        .status-block { display: flex; flex-direction: column; gap: 3px; }
+        .status-line {
+            font-size: 9px; padding: 2px 6px;
+            background: rgba(0,0,0,0.6);
+            letter-spacing: 1px;
+        }
+        .sl-ok   { color: var(--hud); border-left: 2px solid var(--hud); }
+        .sl-warn { color: var(--caution); border-left: 2px solid var(--caution); }
+        .sl-crit { color: var(--warn); border-left: 2px solid var(--warn); animation: blink 0.5s infinite; }
+
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+        /* Warning annunciator */
+        #annunciator {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            z-index: 30; text-align: center; pointer-events: none;
+        }
+        .ann-panel {
+            border: 2px solid var(--warn); padding: 8px 20px;
+            background: rgba(0,0,0,0.85); margin-bottom: 6px;
+            font: bold 14px 'Orbitron'; color: var(--warn);
+            animation: blink .4s infinite;
+        }
+
+        /* ──── RIGHT PANEL ──── */
+        #right-panel {
+            width: 220px; flex-shrink: 0;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+
+        /* HSI / compass rose */
+        .hsi-wrap {
+            padding: 8px;
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+        }
+        #hsi-canvas { border: 1px solid var(--border); display: block; }
+
+        /* Engine instruments */
+        .eng-panel { padding: 8px; }
+
+        /* Radio / NAV */
+        .nav-table { width: 100%; font-size: 9px; }
+        .nav-table td { padding: 3px 6px; border-bottom: 1px solid #0d1610; }
+        .nav-table td:last-child { color: #fff; text-align: right; font-family: 'Orbitron'; font-size: 10px; }
+
+        /* Checklist */
+        .checklist-wrap { padding: 6px 8px; flex: 1; overflow-y: auto; }
+        .checklist-wrap::-webkit-scrollbar { width: 3px; }
+        .checklist-wrap::-webkit-scrollbar-thumb { background: var(--border); }
+        .cl-item {
+            display: flex; justify-content: space-between;
+            padding: 3px 0; border-bottom: 1px solid #0a0f0c;
+            font-size: 9px; cursor: pointer;
+        }
+        .cl-item.done { color: var(--hud); }
+        .cl-item.done .cl-status::after { content: 'COMPL'; color: var(--hud); }
+        .cl-item:not(.done) .cl-status::after { content: 'PNDG'; color: var(--caution); }
+
+        /* Scrollbar global */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: var(--border); }
+    </style>
+</head>
+<body>
+
+<!-- ──── HEADER ──── -->
+<div id="header">
+    <div class="sys-title">T-BE5 · GATS · v3.0</div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">SYSTEM</span>
+        <span id="conn-status" class="hdr-val status-err">OFFLINE</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">LOCAL NODE</span>
+        <span id="my-id-display" class="hdr-val">INIT...</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">ZULU TIME</span>
+        <span id="zulu-clock" class="hdr-val">--:--:--Z</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">FLIGHT TIME</span>
+        <span id="flight-timer" class="hdr-val">00:00:00</span>
+    </div>
+    <div class="hdr-right">
+        <input id="peer-id-input" class="hdr-input" type="text" placeholder="REMOTE NODE ID" />
+        <button class="hdr-btn" onclick="connectToPeer()">LINK ▶</button>
+        <button class="hdr-btn" onclick="toggleRole()" id="role-btn">INST MODE</button>
+    </div>
+</div>
+
+<!-- ──── MAIN ──── -->
+<div id="main">
+
+    <!-- LEFT PANEL -->
+    <div id="left-panel">
+
+        <!-- TAD Map -->
+        <div class="mfd" id="map-wrap" style="flex:1; min-height:0;">
+            <div class="mfd-title">
+                <span>TACTICAL AREA DISPLAY</span>
+                <span id="map-live" style="color:var(--hud)" class="blink-on">● LIVE</span>
+            </div>
+            <div id="map" style="height:calc(100% - 26px);"></div>
+        </div>
+
+        <!-- Telemetry -->
+        <div class="mfd" id="tele-wrap">
+            <div class="mfd-title"><span>TELEMETRY FEED</span><span id="tele-lag" style="color:#556">LAG: ---</span></div>
+            <div class="tele-grid">
+                <div class="tele-cell">GS<br><span class="tele-val" id="t-spd">---</span> <span style="font-size:8px">KTS</span></div>
+                <div class="tele-cell">ALT<br><span class="tele-val" id="t-alt">---</span> <span style="font-size:8px">FT</span></div>
+                <div class="tele-cell">HDG<br><span class="tele-val" id="t-hdg">---</span> <span style="font-size:8px">°</span></div>
+                <div class="tele-cell">VS<br><span class="tele-val" id="t-vs">---</span> <span style="font-size:8px">FPM</span></div>
+                <div class="tele-cell">PITCH<br><span class="tele-val" id="t-pit">---</span> <span style="font-size:8px">°</span></div>
+                <div class="tele-cell">BANK<br><span class="tele-val" id="t-bnk">---</span> <span style="font-size:8px">°</span></div>
+            </div>
+            <div class="fuel-bar-wrap">
+                <div class="fuel-label"><span>FUEL STATE</span><span id="t-fuel-pct">100%</span></div>
+                <div class="fuel-bar"><div class="fuel-bar-fill" id="t-fuel-bar" style="width:100%"></div></div>
+            </div>
+        </div>
+
+        <!-- Instructor Fault Injection -->
+        <div class="mfd" id="instructor-wrap">
+            <div class="mfd-title"><span>MALFUNCTION INJECTOR</span><span style="color:var(--warn)">⚠ INST CTRL</span></div>
+            <div class="fault-grid">
+                <div class="fault-btn fb-red" onclick="injectFault('engine_fire')">ENG FIRE<br><span style="font-size:7px">WARNING LIGHT</span></div>
+                <div class="fault-btn fb-red" onclick="injectFault('engine_fail')">ENG FAIL<br><span style="font-size:7px">FLAMEOUT</span></div>
+                <div class="fault-btn fb-orange" onclick="injectFault('pitot_block')">PITOT ICE<br><span style="font-size:7px">IAS UNRELIABLE</span></div>
+                <div class="fault-btn fb-orange" onclick="injectFault('gyro_tumble')">GYRO FAIL<br><span style="font-size:7px">ATTITUDE LOSS</span></div>
+                <div class="fault-btn fb-blue" onclick="injectFault('weather_ifr')">IFR COND<br><span style="font-size:7px">VIS&lt;1KM</span></div>
+                <div class="fault-btn fb-blue" onclick="injectFault('weather_turb')">TURBULENCE<br><span style="font-size:7px">SEVERE</span></div>
+                <div class="fault-btn fb-yellow" onclick="injectFault('hydraulic')">HYD FAIL<br><span style="font-size:7px">CTRL DEGRAD</span></div>
+                <div class="fault-btn fb-yellow" onclick="injectFault('elec_fail')">ELEC FAIL<br><span style="font-size:7px">GEN OFFLINE</span></div>
+                <div class="fault-btn fb-gray" onclick="injectFault('birdstrike')">BIRD STRIKE<br><span style="font-size:7px">INGESTION</span></div>
+                <div class="fault-btn fb-green" onclick="injectFault('reset')">RESET ALL<br><span style="font-size:7px">CLEAR FAULTS</span></div>
+            </div>
+            <!-- Mission params -->
+            <div style="border-top:1px solid var(--border)">
+                <div class="mfd-title">MISSION CONFIG</div>
+                <div class="mission-row"><span>SCENARIO</span>
+                    <select class="mission-select" id="scenario-sel">
+                        <option value="basic_nav">Basic Navigation</option>
+                        <option value="pattern_work">Pattern Work</option>
+                        <option value="instrument">Instrument Approach</option>
+                        <option value="emergency">Emergency Procedures</option>
+                        <option value="formation">Formation Flying</option>
+                    </select>
+                </div>
+                <div class="mission-row"><span>FUEL (LB)</span><input class="mission-input" id="fuel-set" type="number" value="4500" min="500" max="5500"></div>
+                <div class="mission-row"><span>WIND DIR</span><input class="mission-input" id="wind-dir" type="number" value="270" min="0" max="360"></div>
+                <div class="mission-row"><span>WIND KTS</span><input class="mission-input" id="wind-spd" type="number" value="10" min="0" max="60"></div>
+                <div class="mission-row"><span>INIT ALT</span><input class="mission-input" id="init-alt" type="number" value="5500" min="500" max="35000"></div>
+                <div class="fault-btn fb-green" style="margin:4px;font-size:9px" onclick="applyMission()">▶ APPLY MISSION PARAMS</div>
+            </div>
+        </div>
+
+        <!-- Event Log -->
+        <div class="mfd" id="log-wrap">
+            <div class="mfd-title"><span>MISSION EVENT LOG</span><button onclick="clearLog()" style="background:none;border:none;color:#556;font:8px 'Share Tech Mono';cursor:pointer">CLR</button></div>
+            <div id="event-log"></div>
+        </div>
+
+    </div>
+
+    <!-- CENTER: 3D + HUD -->
+    <div id="center">
+        <canvas id="three-canvas"></canvas>
+
+        <!-- Cockpit frame SVG -->
+        <div id="cockpit-frame">
+            <svg viewBox="0 0 800 600" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Windscreen frame -->
+                <path d="M0,0 L0,600 L130,600 L130,350 Q130,280 200,220 L400,180 L600,220 Q670,280 670,350 L670,600 L800,600 L800,0 Z"
+                      fill="#050807" stroke="#1a2e22" stroke-width="1"/>
+                <!-- Center column -->
+                <rect x="370" y="500" width="60" height="100" fill="#050807"/>
+                <!-- Instruments dash shadow -->
+                <rect x="0" y="520" width="800" height="80" fill="#030604"/>
+                <!-- HUD reticle corners -->
+                <g stroke="#00ff88" stroke-width="1" fill="none" opacity="0.5">
+                    <path d="M240,190 L240,210 L260,210"/>
+                    <path d="M560,190 L560,210 L540,210"/>
+                    <path d="M240,410 L240,390 L260,390"/>
+                    <path d="M560,410 L560,390 L540,390"/>
+                </g>
+                <!-- Boresight -->
+                <g stroke="#00ff88" stroke-width="1.5" fill="none" opacity="0.6">
+                    <line x1="385" y1="290" x2="415" y2="290"/>
+                    <line x1="400" y1="275" x2="400" y2="305"/>
+                    <circle cx="400" cy="290" r="15"/>
+                </g>
+            </svg>
+        </div>
+
+        <!-- HUD Overlay -->
+        <div id="hud-overlay">
+            <!-- Heading tape -->
+            <div class="hdg-tape-wrap">
+                <div class="hdg-tape-box">
+                    <div class="hdg-val" id="hud-hdg">120</div>
+                    <div class="hdg-sub">HDG · MAG</div>
+                </div>
+            </div>
+
+            <!-- Speed / ADI / Alt / VSI row -->
+            <div class="tape-area">
+                <!-- Speed tape -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                    <div style="font-size:8px;color:var(--hud-dim);letter-spacing:2px">IAS</div>
+                    <div class="tape-unit">
+                        <div class="tape-scroll" id="spd-tape"></div>
+                        <div class="tape-index"><span class="tape-bigval" id="hud-spd">320</span></div>
+                    </div>
+                    <div style="font-size:8px;color:var(--hud-dim)">KTS</div>
+                    <div style="font-size:9px;color:var(--caution)" id="mach-disp">M 0.52</div>
+                </div>
+
+                <!-- ADI -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                    <div style="font-size:8px;color:var(--hud-dim);letter-spacing:2px">ATT · HUD</div>
+                    <div class="adi-wrap">
+                        <div class="adi-horizon" id="adi-horizon">
+                            <div class="adi-sky"></div>
+                            <div class="adi-ground"></div>
+                            <div class="adi-horizon-line"></div>
+                            <!-- Pitch ladder -->
+                            <div class="adi-pitch-line" style="top:calc(50% - 20%)"></div>
+                            <div class="adi-pitch-line" style="top:calc(50% - 10%)"></div>
+                            <div class="adi-pitch-line" style="top:calc(50% + 10%);left:30%;right:30%"></div>
+                            <div class="adi-pitch-line" style="top:calc(50% + 20%);left:30%;right:30%"></div>
+                        </div>
+                        <div class="adi-crosshair"></div>
+                        <div class="adi-bank-indicator">
+                            <div class="adi-bank-arrow" id="adi-bank-arrow"></div>
+                        </div>
+                    </div>
+                    <div style="font-size:8px;display:flex;gap:12px">
+                        <span>P:<span id="hud-pit" style="color:#fff">+0°</span></span>
+                        <span>B:<span id="hud-bnk" style="color:#fff">0°</span></span>
+                    </div>
+                </div>
+
+                <!-- ALT tape + VSI -->
+                <div style="display:flex;gap:6px;align-items:center">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                        <div style="font-size:8px;color:var(--hud-dim);letter-spacing:2px">BARO ALT</div>
+                        <div class="tape-unit">
+                            <div class="tape-scroll alt-tape" id="alt-tape"></div>
+                            <div class="tape-index"><span class="tape-bigval" id="hud-alt">5500</span></div>
+                        </div>
+                        <div style="font-size:8px;color:var(--hud-dim)">FEET</div>
+                        <div style="font-size:9px;color:var(--hud-dim)" id="fl-disp">FL055</div>
+                    </div>
+                    <!-- VSI -->
+                    <div class="vsi-wrap">
+                        <div style="font-size:7px;padding-top:2px;letter-spacing:1px;color:var(--hud-dim)">VSI</div>
+                        <div class="vsi-label" style="top:20px;right:2px">+20</div>
+                        <div class="vsi-label" style="top:50px;right:2px">+10</div>
+                        <div class="vsi-label" style="top:105px;right:2px">0</div>
+                        <div class="vsi-label" style="top:160px;right:2px">-10</div>
+                        <div class="vsi-label" style="top:190px;right:2px">-20</div>
+                        <div class="vsi-needle" id="vsi-needle"></div>
+                        <div style="position:absolute;bottom:2px;font-size:7px;color:var(--hud-dim)">×100</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom HUD bar -->
+            <div class="hud-bottom">
+                <div class="status-block" id="status-flags">
+                    <div class="status-line sl-ok" id="sl-gear">GEAR: UP</div>
+                    <div class="status-line sl-ok" id="sl-flaps">FLAPS: 0°</div>
+                    <div class="status-line sl-ok" id="sl-master">MASTER: SAFE</div>
+                    <div class="status-line sl-ok" id="sl-aoa">AoA: 4.2°</div>
+                </div>
+
+                <!-- Engine gauges (arc) -->
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                    <div style="font-size:8px;color:var(--hud-dim);letter-spacing:2px">ENG PARAMS</div>
+                    <div class="eng-row">
+                        <div>
+                            <canvas id="n1-gauge" width="70" height="70"></canvas>
+                            <div class="arc-label">N1 %</div>
+                            <div class="arc-val" id="n1-val" style="color:#fff">85</div>
+                        </div>
+                        <div>
+                            <canvas id="egt-gauge" width="70" height="70"></canvas>
+                            <div class="arc-label">EGT °C</div>
+                            <div class="arc-val" id="egt-val" style="color:#fff">620</div>
+                        </div>
+                        <div>
+                            <canvas id="n2-gauge" width="70" height="70"></canvas>
+                            <div class="arc-label">N2 %</div>
+                            <div class="arc-val" id="n2-val" style="color:#fff">91</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="status-block" style="align-items:flex-end">
+                    <div class="status-line sl-ok" id="sl-nav">NAV: VOR/DME</div>
+                    <div class="status-line sl-ok" id="sl-comm">COMM: 122.8</div>
+                    <div class="status-line" style="color:#556;border-left:2px solid #334">BRAVE EAGLE GATS v3.0</div>
+                    <div class="status-line" id="g-readout" style="color:#fff;border-left:2px solid var(--hud)">G: +1.0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warning annunciator overlay -->
+        <div id="annunciator"></div>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div id="right-panel">
+
+        <!-- HSI Compass Rose -->
+        <div class="mfd">
+            <div class="mfd-title"><span>HSI / COMPASS ROSE</span></div>
+            <div class="hsi-wrap">
+                <canvas id="hsi-canvas" width="190" height="190"></canvas>
+                <div style="font-size:9px;display:flex;gap:12px">
+                    <span>BRG: <span id="hsi-brg" style="color:#fff">---°</span></span>
+                    <span>DTK: <span id="hsi-dtk" style="color:#fff">120°</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- G-meter -->
+        <div class="mfd">
+            <div class="mfd-title"><span>G-METER</span></div>
+            <div class="g-meter-wrap">
+                <canvas id="g-canvas" width="190" height="80"></canvas>
+                <div style="display:flex;justify-content:space-around;font-size:9px;margin-top:4px">
+                    <span>MAX: <span id="g-max" style="color:var(--warn)">+1.0</span></span>
+                    <span>CUR: <span id="g-cur" style="color:#fff">+1.0</span></span>
+                    <span>MIN: <span id="g-min" style="color:#44f">+1.0</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- NAV / Radio -->
+        <div class="mfd">
+            <div class="mfd-title"><span>NAV · COMM STACK</span></div>
+            <table class="nav-table">
+                <tr><td>VOR1</td><td id="nav-vor1">112.5</td></tr>
+                <tr><td>VOR2</td><td id="nav-vor2">115.0</td></tr>
+                <tr><td>ILS</td><td id="nav-ils">109.5</td></tr>
+                <tr><td>COMM1</td><td id="nav-c1">122.800</td></tr>
+                <tr><td>COMM2</td><td id="nav-c2">121.500</td></tr>
+                <tr><td>XPDR</td><td id="nav-xp">7700</td></tr>
+                <tr><td>DME</td><td id="nav-dme">--- NM</td></tr>
+            </table>
+        </div>
+
+        <!-- Input controls -->
+        <div class="mfd">
+            <div class="mfd-title"><span>STUDENT INPUT CTRL</span></div>
+            <div style="padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px">
+                <div>THR <input type="range" id="ctrl-thr" min="0" max="100" value="75" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div>
+                <div>RDR <input type="range" id="ctrl-rdr" min="-100" max="100" value="0" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div>
+                <div>PCH <input type="range" id="ctrl-pch" min="-30" max="30" value="0" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div>
+                <div>BNK <input type="range" id="ctrl-bnk" min="-90" max="90" value="0" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div>
+            </div>
+            <div style="padding:4px 6px;display:flex;gap:4px">
+                <div class="fault-btn fb-gray" style="flex:1" onclick="setFlaps(0)">FLAPS 0</div>
+                <div class="fault-btn fb-gray" style="flex:1" onclick="setFlaps(15)">F 15°</div>
+                <div class="fault-btn fb-gray" style="flex:1" onclick="setFlaps(30)">F 30°</div>
+            </div>
+            <div style="padding:4px 6px;display:flex;gap:4px">
+                <div class="fault-btn fb-gray" style="flex:1" onclick="toggleGear()">GEAR ↕</div>
+                <div class="fault-btn fb-red" style="flex:1" onclick="toggleArm()">MASTER ARM</div>
+            </div>
+        </div>
+
+        <!-- Checklist -->
+        <div class="mfd" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+            <div class="mfd-title">
+                <span>CHECKLIST</span>
+                <span id="cl-title" style="color:var(--caution)">PRE-TAKEOFF</span>
+            </div>
+            <div class="checklist-wrap" id="checklist-wrap"></div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// ════════════════════════════════════════
+// FLIGHT STATE
+// ════════════════════════════════════════
+let F = {
+    // Position
+    lat: 22.793, lng: 120.283,
+    alt: 5500, alt_target: 5500,
+    // Motion
+    spd: 320, vs: 0,
+    hdg: 120, hdg_target: 120,
+    pitch: 2, roll: 0,
+    // Engine
+    n1: 85, n2: 91, egt: 620,
+    thrust_pct: 75,
+    fuel: 4500, fuel_max: 4500,
+    // G
+    g_cur: 1.0, g_max: 1.0, g_min: 1.0,
+    // Controls
+    flaps: 0, gear: false, arm: false,
+    rudder: 0,
+    // Environment
+    wind_dir: 270, wind_spd: 10,
+    turbulence: 0, fog: false,
+    // Faults
+    fault_engine_fire: false, fault_engine_fail: false,
+    fault_pitot: false, fault_gyro: false,
+    fault_hydraulic: false, fault_elec: false,
+    // Misc
+    mach: 0.52, aoa: 4.2,
+    flight_time: 0,
+};
+
+let faults_active = {};
+let annunciators = [];
+
+// ════════════════════════════════════════
+// THREE.JS SETUP
+// ════════════════════════════════════════
+const canvas3d = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x6ab4e8);
+scene.fog = new THREE.FogExp2(0x9acce8, 0.0003);
+
+const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 8000);
+camera.position.set(0, 60, 0);
+
+// ── Satellite tile ground system ──
+// Uses ESRI World Imagery (free, no key needed)
+const SAT_ZOOM = 15;        // tile zoom level — zoom 15 gives ~4m/px resolution
+const TILE_WORLD = 2000;    // size of each tile in Three.js world units
+const TILE_GRID = 7;        // NxN grid of tiles rendered at once
+const tileCache = {};       // url -> THREE.Texture
+const tileMeshes = {};      // "tx,ty" -> THREE.Mesh
+const tileGroup = new THREE.Group();
+scene.add(tileGroup);
+
+// Convert lat/lng to OSM tile x,y
+function latLngToTile(lat, lng, zoom) {
+    const n = Math.pow(2, zoom);
+    const x = Math.floor((lng + 180) / 360 * n);
+    const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+    return { x, y };
+}
+
+// Tile origin lat/lng (NW corner)
+function tileToLatLng(x, y, zoom) {
+    const n = Math.pow(2, zoom);
+    const lng = x / n * 360 - 180;
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n)));
+    return { lat: latRad * 180 / Math.PI, lng };
+}
+
+function getSatTileUrl(tx, ty, zoom) {
+    // ESRI World Imagery — free satellite, no API key
+    return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${ty}/${tx}`;
+}
+
+function loadTile(tx, ty) {
+    const key = `${tx},${ty}`;
+    if (tileMeshes[key]) return; // already loaded
+
+    const url = getSatTileUrl(tx, ty, SAT_ZOOM);
+    const geo = new THREE.PlaneGeometry(TILE_WORLD, TILE_WORLD);
+    geo.rotateX(-Math.PI / 2);
+
+    let mat;
+    if (tileCache[url]) {
+        mat = new THREE.MeshBasicMaterial({ map: tileCache[url] });
+    } else {
+        // Placeholder green while loading
+        mat = new THREE.MeshBasicMaterial({ color: 0x5a8844 });
+        const loader = new THREE.TextureLoader();
+        loader.setCrossOrigin('anonymous');
+        loader.load(url, tex => {
+            tileCache[url] = tex;
+            mat.map = tex;
+            mat.color.set(0xffffff);
+            mat.needsUpdate = true;
+        }, undefined, () => {
+            mat.color.set(0x7a9966); // fallback on error
+        });
+    }
+
+    const mesh = new THREE.Mesh(geo, mat);
+    tileGroup.add(mesh);
+    tileMeshes[key] = mesh;
+}
+
+// Reference: the tile under the aircraft at init
+let refTile = latLngToTile(F.lat, F.lng, SAT_ZOOM);
+let refTileLatLng = tileToLatLng(refTile.x, refTile.y, SAT_ZOOM);
+
+// Degrees per tile at this zoom
+function tileDegreesLng(zoom) { return 360 / Math.pow(2, zoom); }
+function tileDegreesLat(zoom) {
+    // approximate: varies with latitude, use local value
+    const n = Math.pow(2, zoom);
+    const latRad = F.lat * Math.PI / 180;
+    return (2 * Math.PI / n) / Math.cos(latRad) * 180 / Math.PI;
+}
+
+// Place a tile mesh in world space relative to aircraft
+function positionTile(tx, ty) {
+    const key = `${tx},${ty}`;
+    const mesh = tileMeshes[key];
+    if (!mesh) return;
+    // Offset in tiles from reference
+    const dx = tx - refTile.x;
+    const dy = ty - refTile.y;
+    // World space: x = east, z = south (Three.js default)
+    mesh.position.set(dx * TILE_WORLD, 0, dy * TILE_WORLD);
+}
+
+// Initial tile grid load
+function refreshTileGrid() {
+    const center = latLngToTile(F.lat, F.lng, SAT_ZOOM);
+    const half = Math.floor(TILE_GRID / 2);
+    for (let dy = -half; dy <= half; dy++) {
+        for (let dx = -half; dx <= half; dx++) {
+            const tx = center.x + dx;
+            const ty = center.y + dy;
+            loadTile(tx, ty);
+            positionTile(tx, ty);
+        }
+    }
+}
+refreshTileGrid();
+
+// Stars
+const starGeo = new THREE.BufferGeometry();
+const starPts = [];
+for (let i = 0; i < 2000; i++) {
+    starPts.push((Math.random() - 0.5) * 8000, Math.random() * 2000 + 200, (Math.random() - 0.5) * 8000);
+}
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPts, 3));
+const starMat = new THREE.PointsMaterial({ color: 0x334444, size: 2 });
+scene.add(new THREE.Points(starGeo, starMat));
+
+// Runway removed — satellite imagery shows real RCSS runway
+
+// Sunlight
+const ambientLight = new THREE.AmbientLight(0xfff8e8, 0.8);
+scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xfffaee, 1.2);
+sunLight.position.set(500, 800, 300);
+scene.add(sunLight);
+
+function resizeRenderer() {
+    const el = document.getElementById('center');
+    const w = el.clientWidth, h = el.clientHeight;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeRenderer);
+resizeRenderer();
+
+// ════════════════════════════════════════
+// LEAFLET MAP
+// ════════════════════════════════════════
+const map = L.map('map', { zoomControl: false, attributionControl: false })
+    .setView([F.lat, F.lng], 11);
+// ESRI World Imagery satellite (free, no API key)
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 17
+}).addTo(map);
+// Labels overlay on top of satellite
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+    maxZoom: 17, opacity: 0.7
+}).addTo(map);
+
+// Aircraft marker
+const acIcon = L.divIcon({
+    html: '<div style="width:12px;height:12px;background:#00ff88;border-radius:50%;border:2px solid white;"></div>',
+    iconSize: [12, 12], iconAnchor: [6, 6]
+});
+const acMarker = L.marker([F.lat, F.lng], { icon: acIcon }).addTo(map);
+
+// Track polyline
+const trackCoords = [[F.lat, F.lng]];
+const trackLine = L.polyline(trackCoords, { color: '#ffdd00', weight: 2, opacity: 0.85 }).addTo(map);
+
+// Waypoints
+const waypoints = [
+    { name: 'RKSS', lat: 22.577, lng: 120.350, color: '#ff8800' },
+    { name: 'CP01', lat: 22.900, lng: 120.500, color: '#ffff00' },
+    { name: 'CP02', lat: 23.100, lng: 120.200, color: '#ffff00' },
+];
+waypoints.forEach(wp => {
+    L.circleMarker([wp.lat, wp.lng], { color: wp.color, radius: 5, weight: 2 })
+        .bindTooltip(wp.name, { className: 'leaflet-tooltip' })
+        .addTo(map);
+});
+
+// ════════════════════════════════════════
+// PEERJS COMM
+// ════════════════════════════════════════
+let peer, conn;
+let isInstructor = false;
+let lastTeleTime = Date.now();
+
+peer = new Peer();
+peer.on('open', id => {
+    document.getElementById('my-id-display').innerText = `NODE-${id.substring(0, 8).toUpperCase()}`;
+    setConnStatus('READY · STANDALONE', 'status-warn');
+    logEvent('System initialised. Standalone mode.', 'info');
+});
+peer.on('connection', c => {
+    conn = c; setupConn();
+    setConnStatus('UPLINK ● ACTIVE', 'status-ok');
+    logEvent(`Uplink established from remote node.`, 'ok');
+});
+peer.on('error', e => {
+    setConnStatus('PEER ERROR', 'status-err');
+    logEvent('PeerJS error: ' + e.type, 'crit');
+});
+
+function connectToPeer() {
+    const id = document.getElementById('peer-id-input').value.trim();
+    if (!id) return;
+    conn = peer.connect(id);
+    setConnStatus('LINKING...', 'status-warn');
+    logEvent(`Attempting link to ${id}`, 'info');
+    setupConn();
+}
+
+function setupConn() {
+    conn.on('open', () => {
+        setConnStatus('UPLINK ● ACTIVE', 'status-ok');
+        logEvent('Data link active.', 'ok');
+    });
+    conn.on('data', data => {
+        lastTeleTime = Date.now();
+        if (data.type === 'tele')   updateInstructorTele(data.payload);
+        if (data.type === 'cmd')    handleCommand(data.payload);
+        if (data.type === 'ann')    showAnnunciator(data.msg, data.level);
+    });
+    conn.on('close', () => {
+        setConnStatus('LINK CLOSED', 'status-err');
+        logEvent('Data link closed.', 'crit');
+    });
+}
+
+function setConnStatus(msg, cls) {
+    const el = document.getElementById('conn-status');
+    el.innerText = msg;
+    el.className = 'hdr-val ' + cls;
+}
+
+function toggleRole() {
+    isInstructor = !isInstructor;
+    document.getElementById('role-btn').innerText = isInstructor ? '▪ STUD MODE' : 'INST MODE';
+    logEvent(`Mode: ${isInstructor ? 'INSTRUCTOR' : 'STUDENT'}`, 'info');
+}
+
+function sendData(obj) {
+    if (conn && conn.open) conn.send(obj);
+}
+
+// ════════════════════════════════════════
+// FAULT INJECTION
+// ════════════════════════════════════════
+function injectFault(fault) {
+    if (fault === 'reset') {
+        faults_active = {};
+        F.fault_engine_fire = F.fault_engine_fail = F.fault_pitot = false;
+        F.fault_gyro = F.fault_hydraulic = F.fault_elec = false;
+        F.turbulence = 0; F.fog = false;
+        scene.fog.density = 0.0005;
+        scene.fog.color.set(0x020608);
+        clearAnnunciators();
+        logEvent('ALL FAULTS CLEARED — System reset.', 'ok');
+        sendData({ type: 'cmd', payload: fault });
+        return;
+    }
+
+    faults_active[fault] = true;
+    const msgs = {
+        engine_fire:  { msg: '🔥 ENGINE FIRE', level: 'crit', log: 'Engine fire warning injected.' },
+        engine_fail:  { msg: 'ENGINE FAILURE\nFLAMEOUT', level: 'crit', log: 'Engine failure injected — thrust loss.' },
+        pitot_block:  { msg: 'PITOT BLOCKED\nIAS UNRELIABLE', level: 'warn', log: 'Pitot block fault active.' },
+        gyro_tumble:  { msg: 'GYRO FAILURE\nATT UNRELIABLE', level: 'warn', log: 'Gyro tumble fault active.' },
+        weather_ifr:  { msg: null, level: null, log: 'IFR conditions set (vis < 1 km).' },
+        weather_turb: { msg: 'SEVERE TURBULENCE', level: 'warn', log: 'Severe turbulence active.' },
+        hydraulic:    { msg: 'HYD PRESS LOW\nCTRL DEGRADED', level: 'crit', log: 'Hydraulic failure injected.' },
+        elec_fail:    { msg: 'ELEC GEN FAIL\nBATTERY ONLY', level: 'warn', log: 'Electrical failure injected.' },
+        birdstrike:   { msg: 'BIRD STRIKE\nENG INGESTION', level: 'crit', log: 'Bird strike event injected.' },
+    };
+    const d = msgs[fault];
+    if (!d) return;
+    if (d.msg) addAnnunciator(d.msg, d.level);
+    logEvent(d.log, d.level === 'crit' ? 'crit' : 'warn');
+
+    // Apply state effects
+    if (fault === 'engine_fail') { F.fault_engine_fail = true; }
+    if (fault === 'engine_fire') { F.fault_engine_fire = true; }
+    if (fault === 'pitot_block') { F.fault_pitot = true; }
+    if (fault === 'gyro_tumble') { F.fault_gyro = true; }
+    if (fault === 'weather_ifr') { F.fog = true; scene.fog.density = 0.025; scene.fog.color.set(0x0a1a0a); }
+    if (fault === 'weather_turb') { F.turbulence = 8; }
+    if (fault === 'hydraulic') { F.fault_hydraulic = true; }
+    if (fault === 'elec_fail') { F.fault_elec = true; }
+    if (fault === 'birdstrike') { F.fault_engine_fire = true; F.turbulence = 5; }
+
+    sendData({ type: 'cmd', payload: fault });
+    sendData({ type: 'ann', msg: d.msg, level: d.level });
+}
+
+function handleCommand(cmd) {
+    injectFault(cmd);
+}
+
+// Annunciator panel
+function addAnnunciator(msg, level) {
+    const id = 'ann_' + Date.now();
+    annunciators.push(id);
+    const div = document.createElement('div');
+    div.id = id;
+    div.className = 'ann-panel';
+    div.style.borderColor = level === 'crit' ? 'var(--warn)' : 'var(--caution)';
+    div.style.color = level === 'crit' ? 'var(--warn)' : 'var(--caution)';
+    div.innerText = msg;
+    document.getElementById('annunciator').appendChild(div);
+    // Auto dismiss after 8s unless crit
+    if (level !== 'crit') setTimeout(() => div.remove(), 8000);
+}
+
+function clearAnnunciators() {
+    document.getElementById('annunciator').innerHTML = '';
+    annunciators = [];
+}
+
+function showAnnunciator(msg, level) {
+    if (msg) addAnnunciator(msg, level);
+}
+
+// ════════════════════════════════════════
+// MISSION CONFIG
+// ════════════════════════════════════════
+function applyMission() {
+    F.fuel = parseFloat(document.getElementById('fuel-set').value) || 4500;
+    F.fuel_max = F.fuel;
+    F.wind_dir = parseFloat(document.getElementById('wind-dir').value) || 270;
+    F.wind_spd = parseFloat(document.getElementById('wind-spd').value) || 10;
+    F.alt = parseFloat(document.getElementById('init-alt').value) || 5500;
+    const sc = document.getElementById('scenario-sel').value;
+    logEvent(`Mission applied: ${sc.toUpperCase()} | FUEL:${F.fuel}LB WIND:${F.wind_dir}/${F.wind_spd}KT ALT:${F.alt}FT`, 'ok');
+    sendData({ type: 'cmd', payload: 'mission:' + JSON.stringify({ sc, fuel: F.fuel, wind_dir: F.wind_dir, wind_spd: F.wind_spd, alt: F.alt }) });
+    // Load scenario checklist
+    loadChecklist(sc);
+}
+
+// ════════════════════════════════════════
+// CHECKLISTS
+// ════════════════════════════════════════
+const checklists = {
+    basic_nav: ['VOR/DME tuned & ID\'d', 'Altimeter set', 'Fuel state checked', 'Transponder ALT', 'Comms estab', 'ENG params normal'],
+    pattern_work: ['Downwind entry 1500ft', 'ASEL checks done', 'Base turn on time', 'ILS identified', 'VASI/PAPI in sight', 'Threshold speed set'],
+    instrument: ['IAP chart loaded', 'Briefing complete', 'Missed apch set', 'DH/DA noted', 'Altimeter set', 'ATC clearance'],
+    emergency: ['Boldface memory', 'Engine fire checklist', 'MAYDAY declared', 'Squawk 7700', 'Nearest runway IDd', 'Crew brief done'],
+    formation: ['Element brief done', 'Radio check wing', 'Join-up speed set', 'Wingtip clearance', 'Abort word agreed', 'Lead visual'],
+};
+
+function loadChecklist(key) {
+    const items = checklists[key] || checklists.basic_nav;
+    const wrap = document.getElementById('checklist-wrap');
+    wrap.innerHTML = '';
+    document.getElementById('cl-title').innerText = key.replace('_', '-').toUpperCase();
+    items.forEach((item, i) => {
+        const d = document.createElement('div');
+        d.className = 'cl-item';
+        d.innerHTML = `<span>${item}</span><span class="cl-status"></span>`;
+        d.onclick = () => { d.classList.toggle('done'); };
+        wrap.appendChild(d);
+    });
+}
+loadChecklist('basic_nav');
+
+// ════════════════════════════════════════
+// EVENT LOG
+// ════════════════════════════════════════
+function logEvent(msg, type = 'info') {
+    const log = document.getElementById('event-log');
+    const d = document.createElement('div');
+    const ts = new Date().toISOString().substring(11, 19) + 'Z';
+    d.className = { ok: 'log-ok', warn: 'log-warn', crit: 'log-crit', info: 'log-info' }[type] || 'log-info';
+    d.innerText = `[${ts}] ${msg}`;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+    document.getElementById('event-log').innerHTML = '';
+}
+
+// ════════════════════════════════════════
+// CONTROLS
+// ════════════════════════════════════════
+function ctrlInput() {
+    F.thrust_pct = parseFloat(document.getElementById('ctrl-thr').value);
+    F.rudder = parseFloat(document.getElementById('ctrl-rdr').value);
+    const pitchInput = parseFloat(document.getElementById('ctrl-pch').value);
+    const bankInput  = parseFloat(document.getElementById('ctrl-bnk').value);
+    F.pitch = pitchInput;
+    F.roll  = bankInput;
+}
+
+function setFlaps(deg) {
+    F.flaps = deg;
+    document.getElementById('sl-flaps').innerText = `FLAPS: ${deg}°`;
+    document.getElementById('sl-flaps').className = 'status-line ' + (deg > 0 ? 'sl-warn' : 'sl-ok');
+    logEvent(`Flaps set to ${deg}°`, 'info');
+}
+
+function toggleGear() {
+    F.gear = !F.gear;
+    const el = document.getElementById('sl-gear');
+    el.innerText = `GEAR: ${F.gear ? 'DOWN ▼' : 'UP'}`;
+    el.className = 'status-line ' + (F.gear ? 'sl-warn' : 'sl-ok');
+    logEvent(`Gear ${F.gear ? 'DOWN' : 'UP'}`, 'info');
+}
+
+function toggleArm() {
+    F.arm = !F.arm;
+    const el = document.getElementById('sl-master');
+    el.innerText = `MASTER: ${F.arm ? '⚠ ARMED' : 'SAFE'}`;
+    el.className = 'status-line ' + (F.arm ? 'sl-crit' : 'sl-ok');
+    logEvent(`Master arm: ${F.arm ? 'ARMED' : 'SAFE'}`, F.arm ? 'warn' : 'ok');
+}
+
+// ════════════════════════════════════════
+// FLIGHT PHYSICS
+// ════════════════════════════════════════
+const DT = 1 / 60;
+let flightSeconds = 0;
+
+function updatePhysics() {
+    flightSeconds += DT;
+    F.flight_time = flightSeconds;
+
+    // Engine model
+    if (F.fault_engine_fail) {
+        F.n1 = Math.max(0, F.n1 - 2 * DT * 10);
+        F.egt = Math.max(0, F.egt - 5);
+        F.thrust_pct = 0;
+    } else {
+        const n1_target = F.fault_engine_fire ? F.thrust_pct * 0.6 : F.thrust_pct * 0.97;
+        F.n1 += (n1_target - F.n1) * 0.05;
+        F.n2 = F.n1 * 1.07;
+        F.egt = 350 + F.n1 * 4.5 + (F.fault_engine_fire ? 250 : 0) + (Math.random() * 10);
+    }
+
+    // Speed model
+    const drag_factor = 1 + (F.flaps / 30) * 0.4 + (F.gear ? 0.3 : 0);
+    const thrust = (F.n1 / 100) * 400;
+    const drag   = (F.spd * 0.8) * drag_factor;
+    const net    = (thrust - drag) * DT * 0.2;
+    F.spd = Math.max(90, Math.min(550, F.spd + net));
+
+    // Wind effect
+    const wdRad = (F.wind_dir - F.hdg) * Math.PI / 180;
+    const headwind = F.wind_spd * Math.cos(wdRad);
+    const eff_spd = F.spd - headwind;
+    F.mach = eff_spd / 660;
+    F.aoa = Math.max(-5, Math.min(25, 2 + (F.pitch * 0.5) + (drag_factor * 0.5)));
+
+    // Turbulence
+    if (F.turbulence > 0) {
+        F.pitch += (Math.random() - 0.5) * F.turbulence * 0.3;
+        F.roll  += (Math.random() - 0.5) * F.turbulence * 0.5;
+        F.pitch = Math.max(-30, Math.min(30, F.pitch));
+        F.roll  = Math.max(-90, Math.min(90, F.roll));
+    }
+
+    // Hydraulic fault — sluggish controls
+    const ctrl_response = F.fault_hydraulic ? 0.02 : 0.1;
+
+    // Altitude / VS
+    const vs_raw = Math.sin(F.pitch * Math.PI / 180) * F.spd * 1.69 * 60;
+    F.vs += (vs_raw - F.vs) * 0.05;
+    F.alt = Math.max(0, F.alt + F.vs * DT / 60);
+
+    // G model
+    const g_raw = Math.cos(F.roll * Math.PI / 180) + Math.abs(F.pitch) * 0.05;
+    F.g_cur += (g_raw - F.g_cur) * 0.1;
+    F.g_max = Math.max(F.g_max, F.g_cur);
+    F.g_min = Math.min(F.g_min, F.g_cur);
+
+    // Heading (bank -> turn)
+    const turn_rate = (F.spd > 0) ? Math.tan(F.roll * Math.PI / 180) * (1091 / F.spd) : 0;
+    F.hdg = (F.hdg + turn_rate * DT * 57.3 + 360) % 360;
+
+    // Position
+    const speed_mps = eff_spd * 0.5144;
+    F.lat += (speed_mps * Math.cos(F.hdg * Math.PI / 180)) / 111320 * DT;
+    F.lng += (speed_mps * Math.sin(F.hdg * Math.PI / 180)) / (111320 * Math.cos(F.lat * Math.PI / 180)) * DT;
+
+    // Fuel burn
+    const burn_rate = (F.n1 / 100) * 0.08;
+    F.fuel = Math.max(0, F.fuel - burn_rate * DT);
+    if (F.fuel <= 0 && !F.fault_engine_fail) {
+        F.fault_engine_fail = true;
+        addAnnunciator('FUEL EXHAUSTED\nFLAMEOUT', 'crit');
+        logEvent('FUEL EXHAUSTED — flameout!', 'crit');
+    }
+    if (F.fuel < F.fuel_max * 0.15 && !faults_active['low_fuel_warn']) {
+        faults_active['low_fuel_warn'] = true;
+        addAnnunciator('FUEL LOW\n<15% STATE', 'warn');
+        logEvent('Fuel state BINGO.', 'warn');
+    }
+}
+
+// ════════════════════════════════════════
+// GAUGES
+// ════════════════════════════════════════
+function drawArcGauge(canvasId, pct, maxPct, label, redArc) {
+    const c = document.getElementById(canvasId);
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2 + 5, r = 28;
+    const startA = Math.PI * 0.75, endA = Math.PI * 2.25;
+
+    // Background arc
+    ctx.beginPath(); ctx.arc(cx, cy, r, startA, endA);
+    ctx.strokeStyle = '#1a2e22'; ctx.lineWidth = 6; ctx.stroke();
+
+    // Value arc
+    const fraction = Math.min(pct / maxPct, 1);
+    const valA = startA + fraction * (endA - startA);
+    const color = (redArc && fraction > redArc) ? '#ff4400' : fraction > 0.85 ? '#ffaa00' : '#00ff88';
+    ctx.beginPath(); ctx.arc(cx, cy, r, startA, valA);
+    ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.stroke();
+
+    // Tick marks
+    for (let t = 0; t <= 5; t++) {
+        const a = startA + (t / 5) * (endA - startA);
+        ctx.beginPath();
+        ctx.moveTo(cx + (r - 8) * Math.cos(a), cy + (r - 8) * Math.sin(a));
+        ctx.lineTo(cx + (r + 2) * Math.cos(a), cy + (r + 2) * Math.sin(a));
+        ctx.strokeStyle = '#334'; ctx.lineWidth = 1; ctx.stroke();
+    }
+
+    // Value text
+    ctx.fillStyle = color; ctx.font = 'bold 13px Orbitron, monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(Math.floor(pct), cx, cy);
+}
+
+function drawHSI(hdg) {
+    const c = document.getElementById('hsi-canvas');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, r = 86;
+
+    // Background
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#030603'; ctx.fill();
+    ctx.strokeStyle = '#1a2e22'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Rose
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(-hdg * Math.PI / 180);
+    const cardinals = ['N', '3', '6', 'E', '12', '15', 'S', '21', '24', 'W', '30', '33'];
+    const colors = { N: '#ff4400', E: '#ffffff', S: '#ffffff', W: '#ffffff' };
+    for (let i = 0; i < 36; i++) {
+        const a = (i * 10) * Math.PI / 180;
+        const major = i % 3 === 0;
+        ctx.beginPath();
+        ctx.moveTo(0, -(r - (major ? 14 : 7)));
+        ctx.lineTo(0, -(r - 2));
+        ctx.strokeStyle = major ? '#00aa55' : '#1a4022';
+        ctx.lineWidth = major ? 1.5 : 1;
+        ctx.stroke();
+        if (major) {
+            ctx.save(); ctx.rotate(a);
+            ctx.translate(0, -(r - 24));
+            ctx.rotate(-a);
+            ctx.fillStyle = colors[cardinals[i / 3]] || '#00aa55';
+            ctx.font = i % 9 === 0 ? 'bold 11px Orbitron' : '9px Share Tech Mono';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(cardinals[i / 3], 0, 0);
+            ctx.restore();
+        }
+        ctx.rotate(10 * Math.PI / 180);
+    }
+    // Course deviation bar (DTK 120)
+    ctx.beginPath();
+    ctx.moveTo(0, -40); ctx.lineTo(0, 40);
+    ctx.strokeStyle = 'rgba(0,255,136,0.3)'; ctx.lineWidth = 4; ctx.stroke();
+    ctx.restore();
+
+    // Aircraft symbol (fixed)
+    ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx, cy - 20); ctx.lineTo(cx, cy + 20); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - 16, cy); ctx.lineTo(cx + 16, cy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - 8, cy + 12); ctx.lineTo(cx + 8, cy + 12); ctx.stroke();
+
+    // HDG bug
+    const bugA = 0; // heading bug at top
+    ctx.save(); ctx.translate(cx, cy); 
+    ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-6, -(r - 3)); ctx.lineTo(0, -(r + 6)); ctx.lineTo(6, -(r - 3));
+    ctx.stroke(); ctx.restore();
+
+    // Center dot
+    ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffff00'; ctx.fill();
+}
+
+function drawGMeter(cur, mx, mn) {
+    const c = document.getElementById('g-canvas');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    const W = c.width, H = c.height;
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H - 10, r = 65;
+    const minG = -3, maxG = 9;
+    const gToAngle = g => Math.PI + (g - minG) / (maxG - minG) * Math.PI;
+
+    // Arc background
+    ctx.beginPath(); ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
+    ctx.strokeStyle = '#1a2e22'; ctx.lineWidth = 10; ctx.stroke();
+
+    // Red zone (>6G)
+    ctx.beginPath(); ctx.arc(cx, cy, r, gToAngle(6), gToAngle(9));
+    ctx.strokeStyle = '#330000'; ctx.lineWidth = 10; ctx.stroke();
+
+    // Value arc
+    const a0 = gToAngle(1);
+    const aCur = gToAngle(Math.max(minG, Math.min(maxG, cur)));
+    ctx.beginPath(); ctx.arc(cx, cy, r, Math.min(a0, aCur), Math.max(a0, aCur));
+    ctx.strokeStyle = cur > 5 ? '#ff4400' : cur > 3 ? '#ffaa00' : '#00ff88';
+    ctx.lineWidth = 10; ctx.stroke();
+
+    // Ticks
+    for (let g = minG; g <= maxG; g++) {
+        const a = gToAngle(g);
+        ctx.beginPath();
+        ctx.moveTo(cx + (r - 14) * Math.cos(a), cy + (r - 14) * Math.sin(a));
+        ctx.lineTo(cx + (r + 2) * Math.cos(a), cy + (r + 2) * Math.sin(a));
+        ctx.strokeStyle = '#334'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = '#556'; ctx.font = '8px Share Tech Mono';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(g, cx + (r - 24) * Math.cos(a), cy + (r - 24) * Math.sin(a));
+    }
+
+    // Max needle
+    const aMx = gToAngle(Math.max(minG, Math.min(maxG, mx)));
+    ctx.beginPath();
+    ctx.moveTo(cx + (r - 8) * Math.cos(aMx), cy + (r - 8) * Math.sin(aMx));
+    ctx.lineTo(cx + r * Math.cos(aMx), cy + r * Math.sin(aMx));
+    ctx.strokeStyle = '#ff4400'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Min needle
+    const aMn = gToAngle(Math.max(minG, Math.min(maxG, mn)));
+    ctx.beginPath();
+    ctx.moveTo(cx + (r - 8) * Math.cos(aMn), cy + (r - 8) * Math.sin(aMn));
+    ctx.lineTo(cx + r * Math.cos(aMn), cy + r * Math.sin(aMn));
+    ctx.strokeStyle = '#4444ff'; ctx.lineWidth = 2; ctx.stroke();
+
+    // Current needle
+    const aNeedle = gToAngle(Math.max(minG, Math.min(maxG, cur)));
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(aNeedle - Math.PI / 2);
+    ctx.beginPath();
+    ctx.moveTo(-3, 0); ctx.lineTo(0, -(r - 4)); ctx.lineTo(3, 0);
+    ctx.closePath(); ctx.fillStyle = '#fff'; ctx.fill();
+    ctx.restore();
+
+    ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff'; ctx.fill();
+}
+
+// ════════════════════════════════════════
+// HUD TAPE INIT
+// ════════════════════════════════════════
+function buildTapes() {
+    const spdTape = document.getElementById('spd-tape');
+    const altTape = document.getElementById('alt-tape');
+    for (let i = 60; i >= 0; i--) {
+        const v = i * 20;
+        const ds = document.createElement('div');
+        ds.style.cssText = 'height:40px;font-size:9px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;';
+        ds.style.color = v % 100 === 0 ? '#00ff88' : '#224';
+        ds.style.borderBottom = v % 100 === 0 ? '1px solid rgba(0,255,136,0.2)' : 'none';
+        ds.innerText = v % 100 === 0 ? v : (v % 50 === 0 ? '·' : '');
+        spdTape.appendChild(ds);
+
+        const da = document.createElement('div');
+        da.style.cssText = 'height:40px;font-size:9px;display:flex;align-items:center;justify-content:flex-start;padding-left:4px;';
+        da.style.color = v % 500 === 0 ? '#00ff88' : '#224';
+        da.style.borderBottom = v % 500 === 0 ? '1px solid rgba(0,255,136,0.2)' : 'none';
+        const av = (60 - i) * 500;
+        da.innerText = av % 1000 === 0 ? av : (av % 500 === 0 ? '·' : '');
+        altTape.appendChild(da);
+    }
+}
+buildTapes();
+
+// ════════════════════════════════════════
+// INSTRUCTOR TELE UPDATE
+// ════════════════════════════════════════
+function updateInstructorTele(data) {
+    document.getElementById('t-spd').innerText = Math.floor(data.spd);
+    document.getElementById('t-alt').innerText = Math.floor(data.alt);
+    document.getElementById('t-hdg').innerText = Math.floor(data.hdg);
+    document.getElementById('t-vs').innerText  = (data.vs > 0 ? '+' : '') + Math.floor(data.vs);
+    document.getElementById('t-pit').innerText = (data.pitch > 0 ? '+' : '') + data.pitch.toFixed(1);
+    document.getElementById('t-bnk').innerText = data.roll.toFixed(1);
+    const fuelPct = Math.floor((data.fuel / data.fuel_max) * 100);
+    document.getElementById('t-fuel-pct').innerText = fuelPct + '%';
+    const bar = document.getElementById('t-fuel-bar');
+    bar.style.width = fuelPct + '%';
+    bar.style.background = fuelPct < 15 ? '#ff4400' : fuelPct < 30 ? '#ffaa00' : 'var(--hud)';
+    acMarker.setLatLng([data.lat, data.lng]);
+    trackCoords.push([data.lat, data.lng]);
+    if (trackCoords.length > 500) trackCoords.shift();
+    trackLine.setLatLngs(trackCoords);
+    map.panTo([data.lat, data.lng]);
+    const lag = Date.now() - lastTeleTime;
+    document.getElementById('tele-lag').innerText = `LAG: ${lag}ms`;
+}
+
+// ════════════════════════════════════════
+// CLOCK
+// ════════════════════════════════════════
+function updateClocks() {
+    const z = new Date();
+    document.getElementById('zulu-clock').innerText =
+        z.getUTCHours().toString().padStart(2,'0') + ':' +
+        z.getUTCMinutes().toString().padStart(2,'0') + ':' +
+        z.getUTCSeconds().toString().padStart(2,'0') + 'Z';
+    const ft = Math.floor(F.flight_time);
+    const hh = Math.floor(ft / 3600).toString().padStart(2,'0');
+    const mm = Math.floor((ft % 3600) / 60).toString().padStart(2,'0');
+    const ss = (ft % 60).toString().padStart(2,'0');
+    document.getElementById('flight-timer').innerText = `${hh}:${mm}:${ss}`;
+}
+
+// ════════════════════════════════════════
+// MAIN ANIMATION LOOP
+// ════════════════════════════════════════
+let frame = 0;
+function animate() {
+    requestAnimationFrame(animate);
+    frame++;
+
+    updatePhysics();
+
+    // ── 3D Scene ──
+    const pitchRad = -F.pitch * Math.PI / 180;
+    const rollRad  = F.roll  * Math.PI / 180;
+    camera.rotation.order = 'YXZ';
+    camera.rotation.y = -F.hdg * Math.PI / 180;
+    camera.rotation.x = pitchRad * 0.8;
+    camera.rotation.z = -rollRad * 0.3;
+
+    // Move tileGroup so aircraft is always at world origin
+    // Convert aircraft lat/lng offset from refTile NW corner → world units
+    const acTile = latLngToTile(F.lat, F.lng, SAT_ZOOM);
+    const dTileX = acTile.x - refTile.x;
+    const dTileY = acTile.y - refTile.y;
+    // Sub-tile fractional offset
+    const refNW = tileToLatLng(acTile.x, acTile.y, SAT_ZOOM);
+    const nextNW = tileToLatLng(acTile.x + 1, acTile.y + 1, SAT_ZOOM);
+    const fracX = (F.lng - refNW.lng) / (nextNW.lng - refNW.lng);
+    const fracY = (refNW.lat - F.lat) / (refNW.lat - nextNW.lat);
+    const worldX = (dTileX + fracX) * TILE_WORLD;
+    const worldZ = (dTileY + fracY) * TILE_WORLD;
+    tileGroup.position.set(-worldX, 0, -worldZ);
+
+    // Refresh tile grid every ~2s
+    if (frame % 120 === 0) refreshTileGrid();
+
+    renderer.render(scene, camera);
+
+    // ── HUD ──
+    const pitot_ok = !F.fault_pitot;
+    document.getElementById('hud-hdg').innerText = Math.floor(F.hdg).toString().padStart(3, '0');
+    document.getElementById('hud-spd').innerText = pitot_ok ? Math.floor(F.spd) : '---';
+    document.getElementById('hud-alt').innerText = Math.floor(F.alt);
+    document.getElementById('hud-pit').innerText = (F.pitch >= 0 ? '+' : '') + F.pitch.toFixed(1) + '°';
+    document.getElementById('hud-bnk').innerText = F.roll.toFixed(1) + '°';
+    document.getElementById('mach-disp').innerText = `M ${F.mach.toFixed(2)}`;
+    document.getElementById('fl-disp').innerText = 'FL' + Math.floor(F.alt / 100).toString().padStart(3, '0');
+    document.getElementById('g-readout').innerText = `G: ${F.g_cur >= 0 ? '+' : ''}${F.g_cur.toFixed(1)}`;
+    document.getElementById('sl-aoa').innerText = `AoA: ${F.aoa.toFixed(1)}°`;
+
+    // Speed tape scroll
+    const spdOffset = -(F.spd / 20) * 40 + 110;
+    document.getElementById('spd-tape').style.transform = `translateY(${spdOffset}px)`;
+
+    // Alt tape scroll
+    const altOffset = -(F.alt / 500) * 40 + 110;
+    document.getElementById('alt-tape').style.transform = `translateY(${altOffset}px)`;
+
+    // ADI
+    const gyro_ok = !F.fault_gyro;
+    if (gyro_ok) {
+        document.getElementById('adi-horizon').style.transform =
+            `rotate(${F.roll}deg) translateY(${-F.pitch * 2}px)`;
+        document.getElementById('adi-bank-arrow').style.transform =
+            `rotate(${F.roll}deg)`;
+    }
+
+    // VSI needle (range ±2000 fpm mapped to ±50% height)
+    const vsi_frac = Math.max(-1, Math.min(1, F.vs / 2000));
+    document.getElementById('vsi-needle').style.transform = `rotate(${vsi_frac * 70}deg)`;
+
+    // Engine gauges
+    drawArcGauge('n1-gauge',  F.n1,  110, 'N1',  0.95);
+    drawArcGauge('egt-gauge', F.egt, 950, 'EGT', 0.92);
+    drawArcGauge('n2-gauge',  F.n2,  110, 'N2',  0.97);
+    document.getElementById('n1-val').innerText  = Math.floor(F.n1);
+    document.getElementById('egt-val').innerText = Math.floor(F.egt);
+    document.getElementById('n2-val').innerText  = Math.floor(F.n2);
+
+    // HSI
+    if (frame % 2 === 0) drawHSI(F.hdg);
+
+    // G-meter
+    if (frame % 3 === 0) drawGMeter(F.g_cur, F.g_max, F.g_min);
+    document.getElementById('g-max').innerText = (F.g_max >= 0 ? '+' : '') + F.g_max.toFixed(1);
+    document.getElementById('g-cur').innerText = (F.g_cur >= 0 ? '+' : '') + F.g_cur.toFixed(1);
+    document.getElementById('g-min').innerText = (F.g_min >= 0 ? '+' : '') + F.g_min.toFixed(1);
+
+    // Fuel bar (instructor panel)
+    const fp = (F.fuel / F.fuel_max) * 100;
+    document.getElementById('t-fuel-pct').innerText = Math.floor(fp) + '%';
+    document.getElementById('t-fuel-bar').style.width = fp + '%';
+
+    // Clock
+    if (frame % 60 === 0) updateClocks();
+
+    // Telemetry send (10 Hz)
+    if (frame % 6 === 0) {
+        sendData({
+            type: 'tele',
+            payload: {
+                spd: F.spd, alt: F.alt, hdg: F.hdg, vs: F.vs,
+                pitch: F.pitch, roll: F.roll, fuel: F.fuel, fuel_max: F.fuel_max,
+                lat: F.lat, lng: F.lng, g: F.g_cur
+            }
+        });
+    }
+
+    // Map update (2 Hz)
+    if (frame % 30 === 0) {
+        acMarker.setLatLng([F.lat, F.lng]);
+        trackCoords.push([F.lat, F.lng]);
+        if (trackCoords.length > 500) trackCoords.shift();
+        trackLine.setLatLngs(trackCoords);
+    }
+}
+
+// Init
+updateClocks();
+setInterval(updateClocks, 1000);
+animate();
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+    const thr = document.getElementById('ctrl-thr');
+    const pch = document.getElementById('ctrl-pch');
+    const bnk = document.getElementById('ctrl-bnk');
+    switch (e.key) {
+        case 'ArrowUp':    pch.value = Math.min(30,  parseFloat(pch.value) + 2); ctrlInput(); break;
+        case 'ArrowDown':  pch.value = Math.max(-30, parseFloat(pch.value) - 2); ctrlInput(); break;
+        case 'ArrowLeft':  bnk.value = Math.max(-90, parseFloat(bnk.value) - 5); ctrlInput(); break;
+        case 'ArrowRight': bnk.value = Math.min(90,  parseFloat(bnk.value) + 5); ctrlInput(); break;
+        case '+': case '=': thr.value = Math.min(100, parseFloat(thr.value) + 5); ctrlInput(); break;
+        case '-':           thr.value = Math.max(0,   parseFloat(thr.value) - 5); ctrlInput(); break;
+        case 'g': case 'G': toggleGear(); break;
+        case ' ': pch.value = 0; bnk.value = 0; ctrlInput(); break;
+    }
+    e.preventDefault();
+});
+
+logEvent('T-BE5 GATS v3.0 — System ready.', 'ok');
+logEvent('Keyboard: ↑↓ pitch | ←→ bank | +/- thrust | G gear | SPACE level', 'info');
+</script>
+</body>
+</html>
