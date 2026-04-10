@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>T-BE5 GATS</title>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+:root {
+  --hud: #00ff88;
+  --huddim: #008844;
+  --warn: #ff4400;
+  --caution: #ffaa00;
+  --bg: #050807;
+  --panel: #080e0b;
+  --border: #1a2e22;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--hud); font-family:'Share Tech Mono',monospace; }
+
+/* ── SCREENS ── */
+.screen { position:fixed; inset:0; display:none; flex-direction:column; }
+.screen.active { display:flex; }
+
+/* ══════════════════════════════════
+   ROLE SELECT SCREEN
+══════════════════════════════════ */
+#screen-role {
+  background: radial-gradient(ellipse at center, #0a1a10 0%, #050807 70%);
+  justify-content:center; align-items:center; gap:0;
+}
+
+.role-logo {
+  font-family:'Orbitron',monospace; font-weight:900; font-size:22px;
+  letter-spacing:6px; color:var(--hud); text-align:center;
+  text-shadow: 0 0 30px rgba(0,255,136,0.5);
+  margin-bottom:4px;
+}
+.role-sub {
+  font-size:9px; letter-spacing:4px; color:var(--huddim);
+  text-align:center; margin-bottom:32px;
+}
+
+.role-card {
+  width:88vw; max-width:340px;
+  border:1px solid var(--border);
+  background:var(--panel);
+  padding:28px 20px;
+  display:flex; flex-direction:column; align-items:center; gap:12px;
+  cursor:pointer; transition:all .2s;
+  position:relative; overflow:hidden;
+  margin-bottom:14px;
+}
+.role-card::before {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(135deg, rgba(0,255,136,0.04) 0%, transparent 60%);
+}
+.role-card:active { transform:scale(0.97); background:#0d1a11; }
+
+.role-icon { font-size:36px; margin-bottom:4px; }
+.role-name {
+  font-family:'Orbitron',monospace; font-size:16px; font-weight:700;
+  letter-spacing:4px;
+}
+.role-name.inst { color:#ffaa00; }
+.role-name.stud { color:var(--hud); }
+.role-desc { font-size:10px; color:#556; text-align:center; line-height:1.6; }
+
+.link-row {
+  width:88vw; max-width:340px;
+  border:1px solid var(--border); background:#050a07;
+  padding:12px 14px; display:flex; flex-direction:column; gap:8px;
+}
+.link-label { font-size:9px; letter-spacing:2px; color:#556; }
+.link-input {
+  background:#000; border:1px solid #1f4; color:var(--hud);
+  padding:10px; font:12px 'Share Tech Mono',monospace;
+  width:100%; outline:none;
+}
+.my-node { font-size:9px; color:#4a8; word-break:break-all; padding:4px 0; }
+.link-btn {
+  background:transparent; border:1px solid var(--hud);
+  color:var(--hud); padding:10px;
+  font:11px 'Share Tech Mono',monospace;
+  cursor:pointer; letter-spacing:3px; width:100%;
+  transition:all .2s;
+}
+.link-btn:active { background:var(--hud); color:#000; }
+
+/* ══════════════════════════════════
+   SHARED HEADER
+══════════════════════════════════ */
+.top-bar {
+  height:44px; flex-shrink:0;
+  background:#020403; border-bottom:1px solid var(--border);
+  display:flex; align-items:center; padding:0 10px; gap:10px;
+}
+.top-title { font-family:'Orbitron',monospace; font-size:10px; font-weight:900; letter-spacing:3px; }
+.top-title.inst { color:#ffaa00; }
+.top-title.stud { color:var(--hud); }
+.top-status { font-size:8px; letter-spacing:1px; }
+.st-ok   { color:var(--hud); }
+.st-warn { color:var(--caution); }
+.st-err  { color:var(--warn); }
+.top-right { margin-left:auto; display:flex; gap:8px; align-items:center; }
+.icon-btn {
+  background:transparent; border:1px solid var(--border);
+  color:#556; padding:6px 10px; font:9px 'Share Tech Mono',monospace;
+  cursor:pointer; transition:all .15s;
+}
+.icon-btn:active { border-color:var(--hud); color:var(--hud); }
+.node-id { font-size:8px; color:#334; }
+
+/* ══════════════════════════════════
+   INSTRUCTOR SCREEN
+══════════════════════════════════ */
+#screen-inst { background:var(--bg); }
+
+#inst-body {
+  flex:1; overflow-y:auto; overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
+  padding:6px; display:flex; flex-direction:column; gap:6px;
+}
+#inst-body::-webkit-scrollbar { display:none; }
+
+/* Section card */
+.card {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:2px; overflow:hidden;
+}
+.card-title {
+  background:#0a0f0c; border-bottom:1px solid var(--border);
+  font-size:9px; padding:5px 10px; letter-spacing:3px; color:var(--huddim);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.card-badge { font-size:8px; padding:2px 6px; border:1px solid; }
+.badge-warn  { border-color:var(--warn);    color:var(--warn); }
+.badge-ok    { border-color:var(--hud);     color:var(--hud); }
+.badge-info  { border-color:#334;           color:#556; }
+
+/* TAD map */
+#inst-map { height:240px; filter:invert(100%) hue-rotate(180deg) brightness(75%) saturate(0.4); }
+
+/* Tele grid */
+.tele-grid { display:grid; grid-template-columns:1fr 1fr 1fr; }
+.tele-cell { padding:8px 10px; border-right:1px solid #0d1610; border-bottom:1px solid #0d1610; }
+.tele-cell:nth-child(3n) { border-right:none; }
+.tele-lbl { font-size:8px; color:#556; }
+.tele-val { font:bold 16px 'Orbitron',monospace; color:#fff; }
+.tele-unit { font-size:8px; color:#334; }
+
+/* Fuel bar */
+.fuel-wrap { padding:8px 10px; }
+.fuel-row { display:flex; justify-content:space-between; font-size:9px; margin-bottom:5px; }
+.fuel-bar { height:8px; background:#0a0f0c; border:1px solid var(--border); border-radius:1px; }
+.fuel-fill { height:100%; background:var(--hud); border-radius:1px; transition:width .5s, background .5s; }
+
+/* Fault grid */
+.fault-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:8px; }
+.fbtn {
+  padding:14px 8px; border:1px solid; font:10px 'Share Tech Mono',monospace;
+  cursor:pointer; text-align:center; letter-spacing:1px;
+  line-height:1.5; transition:all .15s; border-radius:1px;
+  user-select:none; -webkit-user-select:none;
+}
+.fbtn:active { filter:brightness(1.5); transform:scale(0.97); }
+.fb-red  { border-color:#622; color:#f55; background:#110000; }
+.fb-org  { border-color:#642; color:#fa0; background:#110800; }
+.fb-blu  { border-color:#224; color:#66f; background:#000011; }
+.fb-yel  { border-color:#442; color:#ff0; background:#111000; }
+.fb-gry  { border-color:#333; color:#aaa; background:#111; }
+.fb-grn  { border-color:#262; color:#0f0; background:#001400; }
+.fb-wid  { grid-column:1/-1; padding:12px; }
+
+/* Mission config */
+.mission-form { padding:8px 10px; display:flex; flex-direction:column; gap:0; }
+.mf-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #0d1610; font-size:10px; }
+.mf-row:last-child { border-bottom:none; }
+.mf-input, .mf-select {
+  background:#000; border:1px solid var(--border); color:var(--hud);
+  font:11px 'Share Tech Mono',monospace; padding:6px 8px; width:140px; outline:none;
+}
+
+/* Event log */
+#inst-log {
+  height:150px; overflow-y:auto; padding:6px 10px;
+  font-size:9px; line-height:1.7;
+}
+#inst-log::-webkit-scrollbar { width:2px; }
+#inst-log::-webkit-scrollbar-thumb { background:var(--border); }
+.log-ok   { color:var(--huddim); }
+.log-warn { color:var(--caution); }
+.log-crit { color:var(--warn); }
+.log-info { color:#445; }
+
+/* Annunciator (instructor) */
+#inst-ann { padding:0 8px 6px; display:flex; flex-direction:column; gap:4px; }
+.ann-item {
+  padding:8px 12px; border:1px solid; font:bold 11px 'Orbitron',monospace;
+  text-align:center; animation:blink .5s infinite;
+}
+.ann-crit { border-color:var(--warn); color:var(--warn); background:rgba(255,68,0,0.05); }
+.ann-warn { border-color:var(--caution); color:var(--caution); background:rgba(255,170,0,0.05); animation-duration:.8s; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ══════════════════════════════════
+   STUDENT SCREEN
+══════════════════════════════════ */
+#screen-stud { background:#020608; position:relative; }
+
+#stud-hud {
+  position:absolute; inset:0; z-index:10;
+  pointer-events:none; display:flex; flex-direction:column;
+}
+
+/* Heading tape */
+.s-hdg-wrap { display:flex; justify-content:center; padding-top:6px; }
+.s-hdg-box {
+  border:1px solid var(--hud); border-top:none;
+  padding:2px 28px 5px; text-align:center;
+}
+.s-hdg-val { font:bold 24px 'Orbitron',monospace; }
+.s-hdg-sub { font-size:8px; color:var(--huddim); letter-spacing:3px; }
+
+/* Tape + ADI middle */
+.s-middle { flex:1; display:flex; align-items:center; justify-content:space-between; padding:0 4px; }
+
+/* Vertical tapes */
+.s-tape { width:54px; height:180px; border:1px solid var(--hud); position:relative; overflow:hidden; }
+.s-tape-scroll { position:absolute; width:100%; font-size:9px; transition:transform .08s linear; }
+.s-tape-scroll.spd { text-align:right; padding-right:4px; color:var(--huddim); }
+.s-tape-scroll.alt { text-align:left;  padding-left:4px;  color:var(--huddim); }
+.s-tape-index {
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,255,136,0.07); border:2px solid var(--hud);
+  pointer-events:none;
+}
+.s-tape-bigval { font:bold 16px 'Orbitron',monospace; color:#fff; }
+
+/* ADI */
+.s-adi { width:130px; height:130px; position:relative; border:1px solid var(--hud); overflow:hidden; flex-shrink:0; }
+.s-adi-horizon { position:absolute; width:200%; height:200%; top:-50%; left:-50%; transition:transform .06s linear; }
+.s-adi-sky    { width:100%; height:50%; background:#081828; }
+.s-adi-ground { width:100%; height:50%; background:#1a0d04; }
+.s-adi-hline  { position:absolute; top:50%; left:0; right:0; height:2px; background:#fff; margin-top:-1px; }
+.s-adi-cross {
+  position:absolute; inset:0; pointer-events:none;
+  display:flex; align-items:center; justify-content:center;
+}
+.s-adi-cross::before {
+  content:''; position:absolute; left:14px; right:14px; height:2px; background:#ff0; top:50%;
+}
+.s-adi-cross::after {
+  content:''; position:absolute; left:50%; top:35%; bottom:35%; width:2px; background:#ff0; margin-left:-1px;
+}
+
+/* Bottom HUD */
+.s-bottom { padding:4px 8px 6px; display:flex; justify-content:space-between; align-items:flex-end; }
+.s-status { display:flex; flex-direction:column; gap:2px; }
+.s-stat { font-size:9px; padding:2px 6px; background:rgba(0,0,0,0.7); }
+.s-stat.ok   { color:var(--hud);     border-left:2px solid var(--hud); }
+.s-stat.warn { color:var(--caution); border-left:2px solid var(--caution); }
+.s-stat.crit { color:var(--warn);    border-left:2px solid var(--warn); animation:blink .4s infinite; }
+
+.s-eng { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.s-eng-row { display:flex; gap:4px; }
+.s-eng-cell { width:52px; text-align:center; }
+.s-eng-lbl { font-size:7px; color:var(--huddim); }
+.s-eng-arc { display:block; margin:0 auto; }
+.s-eng-val { font:bold 10px 'Orbitron'; margin-top:1px; }
+
+.s-right-info { display:flex; flex-direction:column; align-items:flex-end; gap:3px; }
+.s-mach { font-size:10px; color:var(--huddim); }
+.s-vs   { font-size:10px; }
+.s-g    { font:bold 12px 'Orbitron'; color:#fff; }
+.s-fl   { font-size:9px; color:var(--huddim); }
+
+/* Annunciator overlay (student) */
+#stud-ann {
+  position:absolute; top:54px; left:50%; transform:translateX(-50%);
+  z-index:20; pointer-events:none;
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+  width:90vw;
+}
+
+/* Virtual joystick */
+#stud-controls {
+  position:absolute; bottom:0; left:0; right:0; z-index:15;
+  display:flex; justify-content:space-between; align-items:flex-end;
+  padding:8px 12px 10px; pointer-events:none;
+  background:linear-gradient(transparent, rgba(2,6,8,0.9) 60%);
+}
+
+/* Throttle */
+.throttle-wrap {
+  pointer-events:all;
+  width:44px; height:160px;
+  background:rgba(0,20,10,0.6); border:1px solid var(--border);
+  position:relative; border-radius:2px; user-select:none;
+  display:flex; flex-direction:column; align-items:center;
+}
+.throttle-label { font-size:8px; color:var(--huddim); padding:3px 0; letter-spacing:1px; }
+.throttle-track { flex:1; width:100%; position:relative; }
+.throttle-fill {
+  position:absolute; bottom:0; left:6px; right:6px;
+  background:var(--hud); opacity:0.4; border-radius:1px;
+  transition:height .05s;
+}
+.throttle-thumb {
+  position:absolute; left:4px; right:4px; height:12px;
+  background:var(--hud); border-radius:2px;
+  box-shadow:0 0 8px rgba(0,255,136,0.6);
+  cursor:grab;
+}
+.throttle-val { font:bold 11px 'Orbitron'; padding:3px 0; }
+
+/* Joystick */
+/* 虛擬搖桿容器 - 確保可見且可操作 */
+.joystick-wrap {
+  pointer-events: all;
+  width: 130px;
+  height: 130px;
+  position: relative;
+  user-select: none;
+  flex-shrink: 0;
+  /* 新增：確保不被裁切 */
+  overflow: visible;
+  z-index: 30;
+}
+
+.joystick-base {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: rgba(0, 40, 20, 0.7);
+  border: 1px solid var(--border);
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-shadow: 0 0 8px rgba(0,255,136,0.2);
+}
+
+.joystick-ring {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 255, 136, 0.4);
+  position: absolute;
+  top: 25px;
+  left: 25px;
+}
+
+.joystick-knob {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0, 255, 136, 0.5);  /* 改為半透明綠色，明顯可見 */
+  border: 2px solid var(--hud);
+  position: absolute;
+  top: 41px;
+  left: 41px;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.6);
+  transition: box-shadow 0.1s, transform 0.05s linear;
+  cursor: grab;
+}
+
+.joystick-knob:active {
+  cursor: grabbing;
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.9);
+}
+
+/* Quick action buttons */
+.quick-btns {
+  pointer-events:all;
+  display:flex; flex-direction:column; gap:6px;
+}
+.q-btn {
+  width:56px; padding:10px 0; font:9px 'Share Tech Mono',monospace;
+  text-align:center; border:1px solid var(--border); color:#556;
+  background:rgba(0,0,0,0.5); cursor:pointer; letter-spacing:1px;
+  border-radius:1px; transition:all .1s;
+}
+.q-btn:active { border-color:var(--hud); color:var(--hud); background:rgba(0,255,136,0.08); }
+.q-btn.armed  { border-color:var(--warn); color:var(--warn); }
+.q-btn.active { border-color:var(--hud);  color:var(--hud); }
+
+/* Fault annunciator from instructor */
+.ann-item { border-radius:2px; }
+
+
+
+/* 強制重設搖桿區域 - 保證可見 */
+.joystick-wrap {
+  position: fixed !important;
+  bottom: 20px !important;
+  right: 20px !important;
+  width: 130px !important;
+  height: 130px !important;
+  background: rgba(0, 20, 10, 0.9) !important;
+  border-radius: 65px !important;
+  border: 1px solid var(--hud) !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+  overflow: visible !important;
+}
+
+.joystick-base {
+  display: none !important;  /* 隱藏原本的底層，改用 wrap 自己的背景 */
+}
+
+.joystick-ring {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  width: 80px !important;
+  height: 80px !important;
+  margin: -40px 0 0 -40px !important;
+  border-radius: 40px !important;
+  border: 1px solid rgba(0,255,136,0.5) !important;
+  background: transparent !important;
+}
+
+.joystick-knob {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  width: 48px !important;
+  height: 48px !important;
+  margin: -24px 0 0 -24px !important;
+  background: rgba(0, 255, 136, 0.8) !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 24px !important;
+  box-shadow: 0 0 12px #00ff88 !important;
+  cursor: grab !important;
+  transition: transform 0.05s linear !important;
+  z-index: 10000 !important;
+}
+
+.joystick-knob:active {
+  cursor: grabbing !important;
+  background: #00ff88 !important;
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════
+     SCREEN 0: ROLE SELECT
+══════════════════════════════ -->
+<div id="screen-role" class="screen active">
+  <div style="height:48px"></div>
+  <div class="role-logo">T-BE5 · GATS</div>
+  <div class="role-sub">GROUND ASSIST TRAINING SYSTEM · v3.1</div>
+
+  <div class="role-card" onclick="selectRole('inst')">
+    <div class="role-icon">🎖</div>
+    <div class="role-name inst">INSTRUCTOR</div>
+    <div class="role-desc">教官模式<br>地圖監控 · 故障注入 · 任務設定<br>遙測接收</div>
+  </div>
+
+  <div class="role-card" onclick="selectRole('stud')">
+    <div class="role-icon">✈️</div>
+    <div class="role-name stud">STUDENT PILOT</div>
+    <div class="role-desc">學員模式<br>全螢幕 HUD · 虛擬搖桿操控<br>接收教官指令</div>
+  </div>
+
+  <div class="link-row">
+    <div class="link-label">LOCAL NODE ID</div>
+    <div class="my-node" id="role-my-id">初始化中...</div>
+    <div class="link-label" style="margin-top:8px">REMOTE NODE (可選)</div>
+    <input class="link-input" id="role-peer-input" type="text" placeholder="對方的 Node ID">
+    <button class="link-btn" onclick="doLink()">▶ 建立無線電鏈路</button>
+  </div>
+
+  <div style="height:24px"></div>
+</div>
+
+<!-- ══════════════════════════════
+     SCREEN 1: INSTRUCTOR
+══════════════════════════════ -->
+<div id="screen-inst" class="screen">
+  <div class="top-bar">
+    <div class="top-title inst">🎖 INSTRUCTOR</div>
+    <div class="top-status" id="inst-conn-st">●</div>
+    <div class="node-id" id="inst-node-id">...</div>
+    <div class="top-right">
+      <button class="icon-btn" onclick="clearAnns()">CLR ANN</button>
+      <button class="icon-btn" onclick="goBack()">⬅ 返回</button>
+    </div>
+  </div>
+
+  <div id="inst-body">
+
+    <!-- Annunciators -->
+    <div id="inst-ann"></div>
+
+    <!-- TAD -->
+    <div class="card">
+      <div class="card-title">
+        TACTICAL AREA DISPLAY
+        <span class="card-badge badge-ok">● LIVE</span>
+      </div>
+      <div id="inst-map"></div>
+    </div>
+
+    <!-- Telemetry -->
+    <div class="card">
+      <div class="card-title">TELEMETRY FEED
+        <span class="card-badge badge-info" id="inst-lag">LAG: --</span>
+      </div>
+      <div class="tele-grid">
+        <div class="tele-cell">
+          <div class="tele-lbl">IAS</div>
+          <div><span class="tele-val" id="it-spd">---</span><span class="tele-unit"> KTS</span></div>
+        </div>
+        <div class="tele-cell">
+          <div class="tele-lbl">ALT</div>
+          <div><span class="tele-val" id="it-alt">---</span><span class="tele-unit"> FT</span></div>
+        </div>
+        <div class="tele-cell">
+          <div class="tele-lbl">HDG</div>
+          <div><span class="tele-val" id="it-hdg">---</span><span class="tele-unit"> °</span></div>
+        </div>
+        <div class="tele-cell">
+          <div class="tele-lbl">VS</div>
+          <div><span class="tele-val" id="it-vs">---</span><span class="tele-unit"> FPM</span></div>
+        </div>
+        <div class="tele-cell">
+          <div class="tele-lbl">PITCH</div>
+          <div><span class="tele-val" id="it-pit">---</span><span class="tele-unit"> °</span></div>
+        </div>
+        <div class="tele-cell">
+          <div class="tele-lbl">G</div>
+          <div><span class="tele-val" id="it-g">---</span><span class="tele-unit"> G</span></div>
+        </div>
+      </div>
+      <div class="fuel-wrap">
+        <div class="fuel-row">
+          <span>FUEL STATE</span>
+          <span id="it-fuel-pct">100%</span>
+        </div>
+        <div class="fuel-bar">
+          <div class="fuel-fill" id="it-fuel-bar" style="width:100%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fault injection -->
+    <div class="card">
+      <div class="card-title">MALFUNCTION INJECTOR <span class="card-badge badge-warn">⚠ INST</span></div>
+      <div class="fault-grid">
+        <div class="fbtn fb-red" onclick="sendFault('engine_fire')">🔥 ENG FIRE<br><small>警告燈亮起</small></div>
+        <div class="fbtn fb-red" onclick="sendFault('engine_fail')">💀 ENG FAIL<br><small>熄火</small></div>
+        <div class="fbtn fb-org" onclick="sendFault('pitot_block')">❄ PITOT ICE<br><small>空速不可靠</small></div>
+        <div class="fbtn fb-org" onclick="sendFault('gyro_tumble')">🌀 GYRO FAIL<br><small>姿態失效</small></div>
+        <div class="fbtn fb-blu" onclick="sendFault('weather_ifr')">☁ IFR COND<br><small>能見度&lt;1KM</small></div>
+        <div class="fbtn fb-blu" onclick="sendFault('weather_turb')">💨 TURBULENCE<br><small>嚴重亂流</small></div>
+        <div class="fbtn fb-yel" onclick="sendFault('hydraulic')">⚙ HYD FAIL<br><small>操控退化</small></div>
+        <div class="fbtn fb-yel" onclick="sendFault('elec_fail')">⚡ ELEC FAIL<br><small>發電機離線</small></div>
+        <div class="fbtn fb-gry" onclick="sendFault('birdstrike')">🐦 BIRD STRIKE<br><small>吸入異物</small></div>
+        <div class="fbtn fb-grn" onclick="sendFault('reset')">✔ RESET ALL<br><small>清除所有故障</small></div>
+      </div>
+    </div>
+
+    <!-- Mission config -->
+    <div class="card">
+      <div class="card-title">MISSION CONFIG</div>
+      <div class="mission-form">
+        <div class="mf-row">
+          <span>訓練科目</span>
+          <select class="mf-select" id="inst-scenario">
+            <option value="basic_nav">Basic Navigation</option>
+            <option value="pattern_work">Pattern Work</option>
+            <option value="instrument">Instrument Approach</option>
+            <option value="emergency">Emergency Proc</option>
+            <option value="formation">Formation Flying</option>
+          </select>
+        </div>
+        <div class="mf-row"><span>燃油 (LB)</span><input class="mf-input" id="inst-fuel" type="number" value="4500" min="500" max="5500"></div>
+        <div class="mf-row"><span>風向 (°)</span><input class="mf-input" id="inst-wdir" type="number" value="270" min="0" max="360"></div>
+        <div class="mf-row"><span>風速 (KTS)</span><input class="mf-input" id="inst-wspd" type="number" value="10" min="0" max="60"></div>
+        <div class="mf-row"><span>起始高度 (FT)</span><input class="mf-input" id="inst-alt" type="number" value="5500"></div>
+        <div class="fbtn fb-grn fb-wid" onclick="applyMission()">▶ 套用任務參數</div>
+      </div>
+    </div>
+
+    <!-- Event log -->
+    <div class="card">
+      <div class="card-title">MISSION EVENT LOG
+        <button onclick="clearLog()" style="background:none;border:none;color:#445;font:9px 'Share Tech Mono';cursor:pointer">CLR</button>
+      </div>
+      <div id="inst-log"></div>
+    </div>
+
+    <div style="height:16px"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════
+     SCREEN 2: STUDENT
+══════════════════════════════ -->
+<div id="screen-stud" class="screen">
+  <!-- Background canvas -->
+  <canvas id="stud-bg" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
+
+  <!-- Cockpit frame overlay -->
+  <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;" viewBox="0 0 360 640" preserveAspectRatio="none">
+    <!-- Side pillars -->
+    <rect x="0" y="0" width="4" height="640" fill="#050807"/>
+    <rect x="356" y="0" width="4" height="640" fill="#050807"/>
+    <!-- Bottom dash -->
+    <rect x="0" y="580" width="360" height="60" fill="#030604"/>
+    <!-- Frame corners -->
+    <path d="M0,0 L0,120 L20,140 L20,0 Z" fill="#050807" opacity="0.7"/>
+    <path d="M360,0 L360,120 L340,140 L340,0 Z" fill="#050807" opacity="0.7"/>
+    <!-- HUD reticle -->
+    <g stroke="#00ff88" stroke-width="1" fill="none" opacity="0.4">
+      <path d="M140,200 L140,215 L155,215"/>
+      <path d="M220,200 L220,215 L205,215"/>
+      <path d="M140,340 L140,325 L155,325"/>
+      <path d="M220,340 L220,325 L205,325"/>
+    </g>
+    <!-- Boresight -->
+    <g stroke="#00ff88" stroke-width="1.5" fill="none" opacity="0.5">
+      <line x1="172" y1="268" x2="188" y2="268"/>
+      <line x1="180" y1="260" x2="180" y2="276"/>
+      <circle cx="180" cy="268" r="10"/>
+    </g>
+  </svg>
+
+  <!-- Annunciators -->
+  <div id="stud-ann"></div>
+
+  <!-- HUD -->
+  <div id="stud-hud">
+    <div class="top-bar" style="pointer-events:all">
+      <div class="top-title stud">✈ STUDENT</div>
+      <div class="top-status" id="stud-conn-st">●</div>
+      <div class="node-id" id="stud-node-id">...</div>
+      <div class="top-right">
+        <button class="icon-btn" onclick="goBack()">⬅ 返回</button>
+      </div>
+    </div>
+
+    <!-- HDG -->
+    <div class="s-hdg-wrap">
+      <div class="s-hdg-box">
+        <div class="s-hdg-val" id="s-hdg">120</div>
+        <div class="s-hdg-sub">HDG · MAG</div>
+      </div>
+    </div>
+
+    <!-- Middle instruments -->
+    <div class="s-middle">
+      <!-- Speed tape -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="font-size:7px;color:var(--huddim);letter-spacing:2px">IAS</div>
+        <div class="s-tape">
+          <div class="s-tape-scroll spd" id="s-spd-tape"></div>
+          <div class="s-tape-index"><span class="s-tape-bigval" id="s-spd">320</span></div>
+        </div>
+        <div style="font-size:7px;color:var(--huddim)">KTS</div>
+      </div>
+
+      <!-- ADI -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="font-size:7px;color:var(--huddim);letter-spacing:2px">ATT</div>
+        <div class="s-adi">
+          <div class="s-adi-horizon" id="s-adi-h">
+            <div class="s-adi-sky"></div>
+            <div class="s-adi-ground"></div>
+            <div class="s-adi-hline"></div>
+          </div>
+          <div class="s-adi-cross"></div>
+        </div>
+        <div style="font-size:8px;display:flex;gap:10px">
+          <span>P:<span id="s-pit" style="color:#fff">+0°</span></span>
+          <span>B:<span id="s-bnk" style="color:#fff">0°</span></span>
+        </div>
+      </div>
+
+      <!-- ALT tape -->
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px">
+        <div style="font-size:7px;color:var(--huddim);letter-spacing:2px">ALT</div>
+        <div class="s-tape">
+          <div class="s-tape-scroll alt" id="s-alt-tape"></div>
+          <div class="s-tape-index"><span class="s-tape-bigval" id="s-alt">5500</span></div>
+        </div>
+        <div style="font-size:7px;color:var(--huddim)">FT</div>
+      </div>
+    </div>
+
+    <!-- Bottom status -->
+    <div class="s-bottom">
+      <div class="s-status">
+        <div class="s-stat ok"  id="ss-gear">GEAR: UP</div>
+        <div class="s-stat ok"  id="ss-flap">FLAPS: 0°</div>
+        <div class="s-stat ok"  id="ss-arm">ARM: SAFE</div>
+      </div>
+
+      <div class="s-eng">
+        <div style="font-size:7px;color:var(--huddim);letter-spacing:2px;margin-bottom:2px">ENGINE</div>
+        <div class="s-eng-row">
+          <div class="s-eng-cell">
+            <canvas class="s-eng-arc" id="s-n1" width="52" height="52"></canvas>
+            <div class="s-eng-lbl">N1%</div>
+            <div class="s-eng-val" id="s-n1v">85</div>
+          </div>
+          <div class="s-eng-cell">
+            <canvas class="s-eng-arc" id="s-egt" width="52" height="52"></canvas>
+            <div class="s-eng-lbl">EGT°C</div>
+            <div class="s-eng-val" id="s-egtv">620</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="s-right-info">
+        <div class="s-mach" id="s-mach">M 0.52</div>
+        <div class="s-vs" id="s-vs">VS +0</div>
+        <div class="s-g" id="s-g">+1.0G</div>
+        <div class="s-fl" id="s-fl">FL055</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Virtual controls -->
+  <div id="stud-controls">
+    <!-- Throttle slider -->
+    <div class="throttle-wrap" id="throttle-wrap">
+      <div class="throttle-label">THR</div>
+      <div class="throttle-track" id="thr-track">
+        <div class="throttle-fill" id="thr-fill" style="height:75%"></div>
+        <div class="throttle-thumb" id="thr-thumb" style="bottom:calc(75% - 6px)"></div>
+      </div>
+      <div class="throttle-val" id="thr-val">75%</div>
+    </div>
+
+    <!-- Quick action buttons -->
+    <div class="quick-btns">
+      <div class="q-btn" id="qb-gear" onclick="toggleGear()">GEAR</div>
+      <div class="q-btn" id="qb-flap" onclick="cycleFlaps()">FLAP</div>
+      <div class="q-btn" id="qb-arm"  onclick="toggleArm()">ARM</div>
+      <div class="q-btn" onclick="resetControls()">LEVEL</div>
+    </div>
+
+    <!-- Joystick -->
+    <div class="joystick-wrap" id="js-wrap">
+      <div class="joystick-base"></div>
+      <div class="joystick-ring"></div>
+      <div class="joystick-knob" id="js-knob"></div>
+    </div>
+  </div>
+
+</div><!-- end screen-stud -->
+
+<script>
+// ════════════════════════════════════
+// PEER / COMMS
+// ════════════════════════════════════
+let peer, conn;
+let myRole = null; // 'inst' | 'stud'
+let lastTeleMs = Date.now();
+
+peer = new Peer();
+peer.on('open', id => {
+  const short = 'NODE-' + id.substring(0,8).toUpperCase();
+  document.getElementById('role-my-id').innerText = short;
+  ['inst-node-id','stud-node-id'].forEach(el => { const e = document.getElementById(el); if(e) e.innerText = short; });
+});
+peer.on('connection', c => {
+  conn = c; setupConn();
+});
+peer.on('error', e => {
+  logInst('PeerJS error: ' + e.type, 'crit');
+  setConnStatus('ERR', 'st-err');
+});
+
+function doLink() {
+  const id = document.getElementById('role-peer-input').value.trim();
+  if (!id) return;
+  conn = peer.connect(id);
+  setupConn();
+  logInst('Linking to ' + id, 'info');
+}
+
+function setupConn() {
+  setConnStatus('LINK...', 'st-warn');
+  conn.on('open', () => { setConnStatus('ACTIVE', 'st-ok'); logInst('Data link active.', 'ok'); });
+  conn.on('data', d => {
+    lastTeleMs = Date.now();
+    if (d.type === 'tele')   onTele(d.p);
+    if (d.type === 'fault')  onFault(d.fault);
+    if (d.type === 'mission') onMission(d.p);
+    if (d.type === 'ctrl')   onCtrl(d.p);
+  });
+  conn.on('close', () => { setConnStatus('CLOSED', 'st-err'); });
+}
+
+function sendPeer(obj) { if (conn && conn.open) conn.send(obj); }
+
+function setConnStatus(msg, cls) {
+  ['inst-conn-st','stud-conn-st'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.innerText = '● ' + msg; el.className = 'top-status ' + cls; }
+  });
+}
+
+// ════════════════════════════════════
+// ROLE SELECT
+// ════════════════════════════════════
+function selectRole(role) {
+  myRole = role;
+  document.getElementById('screen-role').classList.remove('active');
+  document.getElementById('screen-' + role).classList.add('active');
+  if (role === 'inst') initInstructor();
+  if (role === 'stud') initStudent();
+}
+
+function goBack() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-role').classList.add('active');
+  myRole = null;
+  stopStudent();
+}
+
+// ════════════════════════════════════
+// INSTRUCTOR
+// ════════════════════════════════════
+let instMap, instMarker, instTrack = [], instTrackLine;
+
+function initInstructor() {
+  logInst('Instructor station ready.', 'ok');
+  setTimeout(() => {
+    if (instMap) return;
+    instMap = L.map('inst-map', { zoomControl:false, attributionControl:false })
+      .setView([22.793, 120.283], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(instMap);
+
+    const icon = L.divIcon({
+      html:'<div style="width:10px;height:10px;background:#00ff88;border-radius:50%;border:2px solid #fff"></div>',
+      iconSize:[10,10], iconAnchor:[5,5]
+    });
+    instMarker = L.marker([22.793, 120.283], {icon}).addTo(instMap);
+    instTrackLine = L.polyline([], {color:'#00aa55', weight:1.5}).addTo(instMap);
+
+    // Waypoints
+    [[22.577,120.350,'RCSS'],[22.900,120.500,'WP01'],[23.100,120.200,'WP02']].forEach(([la,lo,nm])=>{
+      L.circleMarker([la,lo],{color:'#ffaa00',radius:4}).bindTooltip(nm).addTo(instMap);
+    });
+  }, 200);
+}
+
+function sendFault(f) {
+  sendPeer({type:'fault', fault:f});
+  if (f === 'reset') {
+    clearAnns();
+    logInst('ALL FAULTS CLEARED', 'ok');
+    return;
+  }
+  const labels = {
+    engine_fire:'ENG FIRE injected',
+    engine_fail:'Engine failure injected',
+    pitot_block:'Pitot block injected',
+    gyro_tumble:'Gyro failure injected',
+    weather_ifr:'IFR conditions set',
+    weather_turb:'Severe turbulence injected',
+    hydraulic:'Hydraulic failure injected',
+    elec_fail:'Electrical failure injected',
+    birdstrike:'Bird strike injected',
+  };
+  logInst(labels[f] || f, f.includes('fail')||f.includes('fire')||f.includes('strike') ? 'crit' : 'warn');
+  // Show on instructor display too
+  const ann = document.getElementById('inst-ann');
+  const d = document.createElement('div');
+  const level = f.includes('fail')||f.includes('fire')||f.includes('strike') ? 'crit' : 'warn';
+  d.className = 'ann-item ann-' + level;
+  d.innerText = (labels[f] || f).toUpperCase();
+  ann.appendChild(d);
+  if (level !== 'crit') setTimeout(() => d.remove(), 6000);
+}
+
+function applyMission() {
+  const p = {
+    scenario: document.getElementById('inst-scenario').value,
+    fuel: +document.getElementById('inst-fuel').value,
+    wdir: +document.getElementById('inst-wdir').value,
+    wspd: +document.getElementById('inst-wspd').value,
+    alt:  +document.getElementById('inst-alt').value,
+  };
+  sendPeer({type:'mission', p});
+  logInst(`Mission sent: ${p.scenario} | F:${p.fuel}LB W:${p.wdir}/${p.wspd}KT A:${p.alt}FT`, 'ok');
+}
+
+function onTele(d) {
+  if (!d) return;
+  document.getElementById('it-spd').innerText = Math.floor(d.spd);
+  document.getElementById('it-alt').innerText = Math.floor(d.alt);
+  document.getElementById('it-hdg').innerText = Math.floor(d.hdg);
+  document.getElementById('it-vs').innerText  = (d.vs>=0?'+':'')+Math.floor(d.vs);
+  document.getElementById('it-pit').innerText = (d.pitch>=0?'+':'')+d.pitch.toFixed(1);
+  document.getElementById('it-g').innerText   = (d.g>=0?'+':'')+d.g.toFixed(1);
+  const fp = Math.floor((d.fuel/d.fmax)*100);
+  document.getElementById('it-fuel-pct').innerText = fp+'%';
+  const bar = document.getElementById('it-fuel-bar');
+  bar.style.width = fp+'%';
+  bar.style.background = fp<15?'var(--warn)':fp<30?'var(--caution)':'var(--hud)';
+  const lag = Date.now()-lastTeleMs;
+  document.getElementById('inst-lag').innerText = 'LAG: '+lag+'ms';
+  if (instMarker) {
+    instMarker.setLatLng([d.lat,d.lng]);
+    instTrack.push([d.lat,d.lng]);
+    if(instTrack.length>400) instTrack.shift();
+    instTrackLine.setLatLngs(instTrack);
+    if(instTrack.length%20===0) instMap.panTo([d.lat,d.lng]);
+  }
+}
+
+function logInst(msg, type='info') {
+  const log = document.getElementById('inst-log');
+  const d = document.createElement('div');
+  const ts = new Date().toISOString().substring(11,19)+'Z';
+  d.className = {ok:'log-ok',warn:'log-warn',crit:'log-crit',info:'log-info'}[type]||'log-info';
+  d.innerText = `[${ts}] ${msg}`;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() { document.getElementById('inst-log').innerHTML=''; }
+function clearAnns() { document.getElementById('inst-ann').innerHTML=''; }
+
+// ════════════════════════════════════
+// STUDENT PHYSICS
+// ════════════════════════════════════
+let F = {
+  lat:22.793, lng:120.283,
+  alt:5500, spd:320, hdg:120, vs:0,
+  pitch:2, roll:0, mach:0.52,
+  n1:85, n2:91, egt:620,
+  thr:75, fuel:4500, fmax:4500,
+  g:1.0, gmax:1.0, gmin:1.0,
+  flaps:0, gear:false, arm:false,
+  wind_dir:270, wind_spd:10,
+  turbulence:0, fog:false,
+  fault_eng_fire:false, fault_eng_fail:false,
+  fault_pitot:false, fault_gyro:false,
+};
+
+let studRunning = false;
+let studFrame = 0;
+let studRAF;
+
+function initStudent() {
+  buildTapes();
+  initJoystick();
+  initThrottle();
+  studRunning = true;
+  studLoop();
+  logInst('Student HUD active.','ok');
+}
+
+function stopStudent() {
+  studRunning = false;
+  if (studRAF) cancelAnimationFrame(studRAF);
+}
+
+function studLoop() {
+  if (!studRunning) return;
+  studRAF = requestAnimationFrame(studLoop);
+  studFrame++;
+  updatePhysics();
+  updateStudHUD();
+  if (studFrame % 6 === 0) {
+    sendPeer({ type:'tele', p:{
+      spd:F.spd, alt:F.alt, hdg:F.hdg, vs:F.vs,
+      pitch:F.pitch, roll:F.roll, fuel:F.fuel, fmax:F.fmax,
+      lat:F.lat, lng:F.lng, g:F.g
+    }});
+  }
+}
+
+const DT = 1/60;
+function updatePhysics() {
+  if (F.fault_eng_fail) {
+    F.n1 = Math.max(0, F.n1 - 1.5*DT*10);
+    F.egt = Math.max(0, F.egt - 3);
+  } else {
+    const n1t = F.fault_eng_fire ? F.thr*0.6 : F.thr*0.97;
+    F.n1 += (n1t - F.n1)*0.05;
+    F.egt = 350 + F.n1*4.5 + (F.fault_eng_fire ? 260:0) + (Math.random()*8);
+  }
+  F.n2 = F.n1 * 1.07;
+
+  const drag_f = 1 + (F.flaps/30)*0.4 + (F.gear ? 0.3:0);
+  const thrust  = (F.n1/100)*400;
+  const drag    = F.spd * 0.8 * drag_f;
+  F.spd = Math.max(90, Math.min(550, F.spd + (thrust-drag)*DT*0.2));
+
+  const wrad = (F.wind_dir - F.hdg)*Math.PI/180;
+  const hw = F.wind_spd * Math.cos(wrad);
+  F.mach = (F.spd - hw) / 660;
+
+  if (F.turbulence > 0) {
+    F.pitch += (Math.random()-0.5)*F.turbulence*0.25;
+    F.roll  += (Math.random()-0.5)*F.turbulence*0.4;
+    F.pitch = Math.max(-30, Math.min(30, F.pitch));
+    F.roll  = Math.max(-80, Math.min(80, F.roll));
+    jsY = 0; jsX = 0; // visual only
+  }
+
+  const vs_raw = Math.sin(F.pitch*Math.PI/180)*F.spd*1.69*60;
+  F.vs += (vs_raw - F.vs)*0.05;
+  F.alt = Math.max(0, F.alt + F.vs*DT/60);
+
+  const g_raw = Math.cos(F.roll*Math.PI/180) + Math.abs(F.pitch)*0.04;
+  F.g += (g_raw - F.g)*0.12;
+  F.gmax = Math.max(F.gmax, F.g);
+  F.gmin = Math.min(F.gmin, F.g);
+
+  const turn_rate = (F.spd > 0) ? Math.tan(F.roll*Math.PI/180)*(1091/F.spd) : 0;
+  F.hdg = (F.hdg + turn_rate*DT*57.3 + 360) % 360;
+
+  const spd_ms = F.spd * 0.5144;
+  F.lat += (spd_ms*Math.cos(F.hdg*Math.PI/180))/111320*DT;
+  F.lng += (spd_ms*Math.sin(F.hdg*Math.PI/180))/(111320*Math.cos(F.lat*Math.PI/180))*DT;
+
+  const burn = (F.n1/100)*0.07;
+  F.fuel = Math.max(0, F.fuel - burn*DT);
+  if (F.fuel <= 0 && !F.fault_eng_fail) {
+    F.fault_eng_fail = true;
+    showStudAnn('FUEL EXHAUSTED\nFLAMEOUT','crit');
+  }
+  if (F.fuel < F.fmax*0.15 && !F._lowFuelWarn) {
+    F._lowFuelWarn = true;
+    showStudAnn('FUEL LOW\n<15% STATE','warn');
+  }
+}
+
+function updateStudHUD() {
+  // Instruments
+  const pitot = !F.fault_pitot;
+  document.getElementById('s-hdg').innerText = Math.floor(F.hdg).toString().padStart(3,'0');
+  document.getElementById('s-spd').innerText = pitot ? Math.floor(F.spd) : '---';
+  document.getElementById('s-alt').innerText = Math.floor(F.alt);
+  document.getElementById('s-pit').innerText = (F.pitch>=0?'+':'')+F.pitch.toFixed(1)+'°';
+  document.getElementById('s-bnk').innerText = F.roll.toFixed(1)+'°';
+  document.getElementById('s-mach').innerText = 'M '+F.mach.toFixed(2);
+  document.getElementById('s-vs').innerText   = 'VS '+(F.vs>=0?'+':'')+Math.floor(F.vs);
+  document.getElementById('s-g').innerText    = (F.g>=0?'+':'')+F.g.toFixed(1)+'G';
+  document.getElementById('s-fl').innerText   = 'FL'+Math.floor(F.alt/100).toString().padStart(3,'0');
+
+  // Tapes
+  document.getElementById('s-spd-tape').style.transform = `translateY(${-(F.spd/20)*40+90}px)`;
+  document.getElementById('s-alt-tape').style.transform = `translateY(${-(F.alt/500)*40+90}px)`;
+
+  // ADI
+  if (!F.fault_gyro) {
+    document.getElementById('s-adi-h').style.transform =
+      `rotate(${F.roll}deg) translateY(${-F.pitch*1.5}px)`;
+  }
+
+  // Engine gauges
+  drawMiniGauge('s-n1',  F.n1,  110, F.n1>100);
+  drawMiniGauge('s-egt', F.egt, 950, F.egt>880);
+  document.getElementById('s-n1v').innerText  = Math.floor(F.n1);
+  document.getElementById('s-egtv').innerText = Math.floor(F.egt);
+  const egtEl = document.getElementById('s-egtv');
+  egtEl.style.color = F.egt > 880 ? 'var(--warn)' : F.egt > 750 ? 'var(--caution)' : '#fff';
+}
+
+function drawMiniGauge(id, val, max, red) {
+  const c = document.getElementById(id);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const W=c.width, H=c.height, cx=W/2, cy=H/2+4, r=20;
+  ctx.clearRect(0,0,W,H);
+  const s=Math.PI*0.75, e=Math.PI*2.25;
+  ctx.beginPath(); ctx.arc(cx,cy,r,s,e);
+  ctx.strokeStyle='#1a2e22'; ctx.lineWidth=5; ctx.stroke();
+  const f = Math.min(val/max,1);
+  const ve = s + f*(e-s);
+  const col = red ? 'var(--warn)' : f>0.85 ? 'var(--caution)' : 'var(--hud)';
+  ctx.beginPath(); ctx.arc(cx,cy,r,s,ve);
+  ctx.strokeStyle=col; ctx.lineWidth=5; ctx.stroke();
+}
+
+// ── Tapes ──
+function buildTapes() {
+  ['s-spd-tape','s-alt-tape'].forEach((id,i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = '';
+    for (let j=50; j>=0; j--) {
+      const v = i===0 ? j*20 : j*500;
+      const d = document.createElement('div');
+      d.style.cssText = 'height:40px;font-size:9px;display:flex;align-items:center;';
+      d.style.justifyContent = i===0 ? 'flex-end' : 'flex-start';
+      d.style.padding = i===0 ? '0 4px 0 0' : '0 0 0 4px';
+      d.style.color = (i===0 ? v%100===0 : v%1000===0) ? 'var(--hud)' : '#1a3a1a';
+      d.style.borderBottom = (i===0 ? v%100===0 : v%1000===0) ? '1px solid rgba(0,255,136,0.15)' : 'none';
+      d.innerText = (i===0 ? v%100===0 : v%1000===0) ? v : '';
+      el.appendChild(d);
+    }
+  });
+}
+
+// ════════════════════════════════════
+// VIRTUAL JOYSTICK
+// ════════════════════════════════════
+let jsX=0, jsY=0, jsActive=false;
+const JS_LIMIT = 50;
+
+function initJoystick() {
+  const wrap = document.getElementById('js-wrap');
+  const knob = document.getElementById('js-knob');
+
+  function getCenter() {
+    const r = wrap.getBoundingClientRect();
+    return { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+
+  function onMove(cx, cy) {
+    const c = getCenter();
+    let dx = cx - c.x, dy = cy - c.y;
+    const dist = Math.sqrt(dx*dx+dy*dy);
+    if (dist > JS_LIMIT) { dx=dx/dist*JS_LIMIT; dy=dy/dist*JS_LIMIT; }
+    jsX = dx/JS_LIMIT;
+    jsY = dy/JS_LIMIT;
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    // Apply to flight
+    F.roll  = jsX * 60;
+    F.pitch = -jsY * 20;
+  }
+
+  function onEnd() {
+    jsX=0; jsY=0; jsActive=false;
+    knob.style.transform = 'translate(0,0)';
+    // Auto-return controls
+    F.roll  *= 0.7;
+    F.pitch *= 0.7;
+  }
+
+  wrap.addEventListener('touchstart', e => {
+    e.preventDefault(); jsActive=true;
+    const t=e.touches[0]; onMove(t.clientX,t.clientY);
+  }, {passive:false});
+  wrap.addEventListener('touchmove', e => {
+    e.preventDefault();
+    const t=e.touches[0]; onMove(t.clientX,t.clientY);
+  }, {passive:false});
+  wrap.addEventListener('touchend', e => { e.preventDefault(); onEnd(); }, {passive:false});
+
+  // Mouse fallback
+  wrap.addEventListener('mousedown', e => { jsActive=true; onMove(e.clientX,e.clientY); });
+  window.addEventListener('mousemove', e => { if(jsActive) onMove(e.clientX,e.clientY); });
+  window.addEventListener('mouseup', () => { if(jsActive) onEnd(); });
+}
+
+// ════════════════════════════════════
+// THROTTLE
+// ════════════════════════════════════
+function initThrottle() {
+  const track = document.getElementById('thr-track');
+  const thumb  = document.getElementById('thr-thumb');
+  const fill   = document.getElementById('thr-fill');
+  const val    = document.getElementById('thr-val');
+
+  function setThr(clientY) {
+    const r = track.getBoundingClientRect();
+    let pct = 1 - (clientY - r.top) / r.height;
+    pct = Math.max(0, Math.min(1, pct));
+    F.thr = Math.round(pct * 100);
+    thumb.style.bottom = `calc(${pct*100}% - 6px)`;
+    fill.style.height  = (pct*100) + '%';
+    val.innerText = F.thr + '%';
+  }
+
+  let thrActive = false;
+  track.addEventListener('touchstart', e => { e.preventDefault(); thrActive=true; setThr(e.touches[0].clientY); }, {passive:false});
+  track.addEventListener('touchmove',  e => { e.preventDefault(); if(thrActive) setThr(e.touches[0].clientY); }, {passive:false});
+  track.addEventListener('touchend',   e => { e.preventDefault(); thrActive=false; }, {passive:false});
+  track.addEventListener('mousedown',  e => { thrActive=true; setThr(e.clientY); });
+  window.addEventListener('mousemove', e => { if(thrActive) setThr(e.clientY); });
+  window.addEventListener('mouseup',   () => { thrActive=false; });
+}
+
+// ════════════════════════════════════
+// QUICK BUTTONS
+// ════════════════════════════════════
+const flapSteps = [0,15,30,45];
+let flapIdx = 0;
+
+function toggleGear() {
+  F.gear = !F.gear;
+  const el = document.getElementById('ss-gear');
+  el.innerText = 'GEAR: ' + (F.gear?'DOWN ▼':'UP');
+  el.className = 's-stat ' + (F.gear?'warn':'ok');
+  document.getElementById('qb-gear').className = 'q-btn ' + (F.gear?'active':'');
+}
+
+function cycleFlaps() {
+  flapIdx = (flapIdx+1) % flapSteps.length;
+  F.flaps = flapSteps[flapIdx];
+  const el = document.getElementById('ss-flap');
+  el.innerText = 'FLAPS: ' + F.flaps + '°';
+  el.className = 's-stat ' + (F.flaps>0?'warn':'ok');
+  document.getElementById('qb-flap').innerText = 'F' + F.flaps;
+}
+
+function toggleArm() {
+  F.arm = !F.arm;
+  const el = document.getElementById('ss-arm');
+  el.innerText = 'ARM: ' + (F.arm?'⚠ ARMED':'SAFE');
+  el.className = 's-stat ' + (F.arm?'crit':'ok');
+  document.getElementById('qb-arm').className = 'q-btn ' + (F.arm?'armed':'');
+}
+
+function resetControls() {
+  F.pitch = 0; F.roll = 0;
+  jsX=0; jsY=0;
+  document.getElementById('js-knob').style.transform = 'translate(0,0)';
+}
+
+// ════════════════════════════════════
+// FAULT HANDLING (student side)
+// ════════════════════════════════════
+function onFault(f) {
+  if (f === 'reset') {
+    F.fault_eng_fire=F.fault_eng_fail=F.fault_pitot=F.fault_gyro=false;
+    F.turbulence=0; F.fog=false;
+    document.getElementById('stud-ann').innerHTML='';
+    return;
+  }
+  const map = {
+    engine_fire:  ['🔥 ENGINE FIRE','crit'],
+    engine_fail:  ['💀 ENGINE FAIL\nFLAMEOUT','crit'],
+    pitot_block:  ['❄ PITOT BLOCKED\nIAS UNRELIABLE','warn'],
+    gyro_tumble:  ['🌀 GYRO FAIL\nATT UNRELIABLE','warn'],
+    weather_ifr:  ['☁ IFR COND\nVIS < 1KM','warn'],
+    weather_turb: ['💨 SEVERE TURBULENCE','warn'],
+    hydraulic:    ['⚙ HYD FAIL\nCTRL DEGRADED','crit'],
+    elec_fail:    ['⚡ ELEC GEN FAIL\nBATT ONLY','warn'],
+    birdstrike:   ['🐦 BIRD STRIKE\nENG INGESTION','crit'],
+  };
+  const [msg, level] = map[f] || ['FAULT: '+f, 'warn'];
+  showStudAnn(msg, level);
+
+  if (f==='engine_fire')  { F.fault_eng_fire=true; }
+  if (f==='engine_fail')  { F.fault_eng_fail=true; }
+  if (f==='pitot_block')  { F.fault_pitot=true; }
+  if (f==='gyro_tumble')  { F.fault_gyro=true; }
+  if (f==='weather_turb') { F.turbulence=8; }
+  if (f==='birdstrike')   { F.fault_eng_fire=true; F.turbulence=5; }
+}
+
+function showStudAnn(msg, level) {
+  const c = document.getElementById('stud-ann');
+  const d = document.createElement('div');
+  d.className = 'ann-item ann-'+level;
+  d.style.cssText = 'border-radius:2px;padding:8px 16px;text-align:center;font:bold 12px Orbitron,monospace;white-space:pre;';
+  d.style.borderColor = level==='crit'?'var(--warn)':'var(--caution)';
+  d.style.color       = level==='crit'?'var(--warn)':'var(--caution)';
+  d.style.background  = level==='crit'?'rgba(255,68,0,0.08)':'rgba(255,170,0,0.06)';
+  d.style.animation   = 'blink ' + (level==='crit'?'.4s':'.7s') + ' infinite';
+  d.innerText = msg;
+  c.appendChild(d);
+  if (level !== 'crit') setTimeout(() => d.remove(), 8000);
+}
+
+function onMission(p) {
+  if (p.fuel)  { F.fuel=p.fuel; F.fmax=p.fuel; F._lowFuelWarn=false; }
+  if (p.wdir !== undefined) F.wind_dir = p.wdir;
+  if (p.wspd !== undefined) F.wind_spd = p.wspd;
+  if (p.alt)   F.alt = p.alt;
+  showStudAnn('MISSION UPDATED\n' + (p.scenario||'').toUpperCase(), 'warn');
+}
+
+function onCtrl(p) {
+  // reserved for future instructor override
+}
+</script>
+</body>
+</html>

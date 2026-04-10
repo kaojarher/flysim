@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>T-BE5 勇鷹 地面輔助訓練系統 · 暗色儀表 + OSM地圖</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+        /* ===== 暗色儀表主題 (黑色風格) ===== */
+        :root {
+            --hud: #00ff88;
+            --hud-dim: #00aa55;
+            --hud-dark: #003322;
+            --warn: #ff4400;
+            --caution: #ffaa00;
+            --bg: #050807;
+            --panel: #080e0b;
+            --border: #1a2e22;
+            --text-light: #ccddcc;
+            --glass-dark: rgba(0, 0, 0, 0.75);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--hud);
+            font-family: 'Share Tech Mono', monospace;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 掃描線效果 (夜感) */
+        body::after {
+            content: '';
+            position: fixed; inset: 0;
+            background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.1) 2px, rgba(0,0,0,0.1) 4px);
+            pointer-events: none; z-index: 9999;
+        }
+
+        /* ──── HEADER (暗色) ──── */
+        #header {
+            height: 44px; flex-shrink: 0;
+            background: #020403;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center;
+            padding: 0 12px; gap: 16px;
+        }
+
+        .sys-title {
+            font-family: 'Orbitron', monospace;
+            font-size: 11px; font-weight: 900;
+            letter-spacing: 4px;
+            color: var(--hud);
+        }
+
+        .sep { width: 1px; height: 24px; background: var(--border); }
+
+        .hdr-field { display: flex; flex-direction: column; }
+        .hdr-label { font-size: 8px; color: #556; letter-spacing: 2px; }
+        .hdr-val { font-size: 11px; color: #eee; }
+
+        #conn-status { font-size: 10px; font-weight: bold; letter-spacing: 2px; }
+        .status-ok   { color: var(--hud); }
+        .status-warn { color: var(--caution); }
+        .status-err  { color: var(--warn); }
+
+        #my-id-display { font-size: 9px; color: #4a8; letter-spacing: 1px; }
+
+        .hdr-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .hdr-input {
+            background: #000; border: 1px solid #1f4; color: #1f4;
+            padding: 4px 8px; font: 10px 'Share Tech Mono', monospace;
+            width: 180px; outline: none;
+        }
+        .hdr-btn {
+            background: transparent; border: 1px solid var(--hud);
+            color: var(--hud); padding: 4px 12px;
+            font: 10px 'Share Tech Mono', monospace;
+            cursor: pointer; letter-spacing: 2px;
+            transition: all .2s;
+        }
+        .hdr-btn:hover { background: var(--hud); color: #000; }
+
+        /* ──── MAIN LAYOUT ──── */
+        #main { flex: 1; display: flex; gap: 2px; overflow: hidden; padding: 2px; }
+
+        /* ──── 左右面板 (黑色半透) ──── */
+        #left-panel, #right-panel {
+            background: transparent;
+        }
+        .mfd {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .mfd-title {
+            background: #0a0f0c; border-bottom: 1px solid var(--border);
+            font-size: 9px; padding: 5px 10px;
+            letter-spacing: 3px; color: var(--hud-dim);
+            font-weight: bold;
+        }
+
+        /* TAD 地圖 (正常顯示，OSM明亮圖層) */
+        #map-wrap { flex: 1; min-height: 0; }
+        #map { 
+            width: 100%; height: 100%; 
+            filter: none;
+            border-radius: 4px;
+        }
+
+        /* 故障按鈕 (暗色風格) */
+        .fault-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 6px; }
+        .fault-btn {
+            font: 9px 'Share Tech Mono'; padding: 6px 4px;
+            border: 1px solid; cursor: pointer;
+            letter-spacing: 1px; transition: all .15s;
+            text-align: center; border-radius: 6px;
+            background: #0a100e;
+        }
+        .fb-red    { border-color: #622; color: #f44; background: #1a0000; }
+        .fb-red:hover { background: #400; }
+        .fb-orange { border-color: #642; color: #fa0; background: #1a0a00; }
+        .fb-orange:hover { background: #310; }
+        .fb-blue   { border-color: #224; color: #44f; background: #00001a; }
+        .fb-blue:hover { background: #001130; }
+        .fb-yellow { border-color: #442; color: #ff0; background: #1a1500; }
+        .fb-yellow:hover { background: #220; }
+        .fb-gray   { border-color: #333; color: #aaa; background: #111; }
+        .fb-gray:hover { background: #222; }
+        .fb-green  { border-color: #262; color: #0f0; background: #001400; }
+        .fb-green:hover { background: #020; }
+
+        /* 任務設定 */
+        .mission-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; font-size: 9px; border-bottom: 1px solid #111; }
+        .mission-select, .mission-input {
+            background: #000; border: 1px solid #1a2e22; color: var(--hud);
+            font: 9px 'Share Tech Mono'; padding: 2px 4px; border-radius: 4px;
+        }
+
+        /* 事件記錄 */
+        #log-wrap { flex-shrink: 0; height: 130px; }
+        #event-log {
+            height: calc(100% - 26px); overflow-y: auto;
+            padding: 4px 8px; font-size: 8px; line-height: 1.6;
+            background: #030605;
+        }
+        .log-ok   { color: var(--hud-dim); }
+        .log-warn { color: var(--caution); }
+        .log-crit { color: var(--warn); font-weight: bold; }
+        .log-info { color: #888; }
+
+        /* 遙測面板 */
+        .tele-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+        .tele-cell {
+            padding: 4px 8px; border-bottom: 1px solid #0d1610; border-right: 1px solid #0d1610;
+            font-size: 9px; background: rgba(0,10,5,0.4);
+        }
+        .tele-val { font-size: 14px; color: #fff; font-family: 'Orbitron', monospace; font-weight: bold; }
+        .fuel-bar-wrap { padding: 6px 8px; }
+        .fuel-bar { height: 6px; background: #0a0f0c; border-radius: 4px; overflow: hidden; }
+        .fuel-bar-fill { height: 100%; background: var(--hud); transition: width .3s; }
+
+        /* ──── 中央 3D 場景 (夜空) ──── */
+        #center { flex: 1; min-width: 0; position: relative; border-radius: 12px; margin: 2px; background: #000; }
+        #three-canvas { position: absolute; inset: 0; border-radius: 12px; }
+
+        /* 座艙框線 (螢光綠) */
+        #cockpit-frame svg {
+            opacity: 0.7;
+        }
+        #cockpit-frame svg path, #cockpit-frame svg rect {
+            stroke: var(--hud);
+            stroke-width: 1.2;
+        }
+
+        /* HUD 覆蓋層 (暗色透明) */
+        #hud-overlay {
+            position: absolute; inset: 0; pointer-events: none; z-index: 20;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 16px 20px;
+        }
+        .hdg-tape-box {
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(6px);
+            border: 1px solid var(--hud);
+            border-radius: 12px;
+            padding: 4px 18px;
+            box-shadow: 0 0 8px rgba(0,255,136,0.2);
+        }
+        .hdg-val { font: bold 24px 'Orbitron', monospace; color: var(--hud); text-shadow: 0 0 3px #0f0; }
+        .hdg-sub { font-size: 9px; color: var(--hud-dim); letter-spacing: 2px; }
+
+        .tape-unit {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--hud);
+            border-radius: 12px;
+        }
+        .tape-scroll { color: var(--hud-dim); }
+        .tape-index { background: rgba(0, 255, 136, 0.15); border-radius: 8px; }
+        .tape-bigval { font: bold 20px 'Orbitron', monospace; color: #fff; text-shadow: 0 0 2px #0f0; }
+
+        .adi-wrap {
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--hud);
+            border-radius: 16px;
+        }
+        .adi-sky { background: #0a1a2a; }
+        .adi-ground { background: #1a0d04; }
+        .adi-horizon-line { background: white; height: 2px; }
+        .adi-pitch-line { background: rgba(255,255,255,0.6); }
+        .adi-crosshair::before, .adi-crosshair::after { background: #ff0; }
+
+        .vsi-wrap {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--hud);
+            border-radius: 12px;
+        }
+        .vsi-needle { background: var(--hud); width: 3px; }
+        .vsi-label { color: var(--hud-dim); }
+
+        /* 底部狀態 */
+        .status-line {
+            font-size: 9px; padding: 2px 8px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 20px;
+            margin-bottom: 3px;
+            backdrop-filter: blur(2px);
+        }
+        .sl-ok   { color: var(--hud); border-left: 3px solid var(--hud); }
+        .sl-warn { color: var(--caution); border-left: 3px solid var(--caution); }
+        .sl-crit { color: var(--warn); border-left: 3px solid var(--warn); animation: blink 0.6s infinite; }
+
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.6} }
+
+        #annunciator .ann-panel {
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid var(--warn);
+            color: var(--warn);
+            box-shadow: 0 0 12px red;
+            border-radius: 12px;
+        }
+
+        /* 右側儀表 暗色畫布 */
+        .hsi-wrap, .g-meter-wrap { background: rgba(0, 10, 5, 0.7); border-radius: 12px; }
+        canvas { filter: drop-shadow(0 0 2px rgba(0,255,136,0.3)); }
+
+        .nav-table td:last-child { color: var(--hud); font-weight: bold; }
+        .cl-item.done { color: var(--hud); }
+        .cl-item:not(.done) .cl-status::after { color: var(--caution); }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: #0a100e; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <div class="sys-title">T-BE5 · GATS · DARK COCKPIT + OSM</div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">SYSTEM</span>
+        <span id="conn-status" class="hdr-val status-err">OFFLINE</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">LOCAL NODE</span>
+        <span id="my-id-display" class="hdr-val">INIT...</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">ZULU TIME</span>
+        <span id="zulu-clock" class="hdr-val">--:--:--Z</span>
+    </div>
+    <div class="sep"></div>
+    <div class="hdr-field">
+        <span class="hdr-label">FLIGHT TIME</span>
+        <span id="flight-timer" class="hdr-val">00:00:00</span>
+    </div>
+    <div class="hdr-right">
+        <input id="peer-id-input" class="hdr-input" type="text" placeholder="REMOTE NODE ID" />
+        <button class="hdr-btn" onclick="connectToPeer()">LINK ▶</button>
+        <button class="hdr-btn" onclick="toggleRole()" id="role-btn">INST MODE</button>
+    </div>
+</div>
+
+<div id="main">
+    <div id="left-panel">
+        <div class="mfd" id="map-wrap" style="flex:1; min-height:0;">
+            <div class="mfd-title"><span>TACTICAL AREA DISPLAY (OSM)</span><span id="map-live" style="color:var(--hud)">● LIVE</span></div>
+            <div id="map" style="height:calc(100% - 26px);"></div>
+        </div>
+        <div class="mfd" id="tele-wrap">
+            <div class="mfd-title"><span>TELEMETRY FEED</span><span id="tele-lag" style="color:#556">LAG: ---</span></div>
+            <div class="tele-grid">
+                <div class="tele-cell">GS<br><span class="tele-val" id="t-spd">---</span> <span style="font-size:8px">KTS</span></div>
+                <div class="tele-cell">ALT<br><span class="tele-val" id="t-alt">---</span> <span style="font-size:8px">FT</span></div>
+                <div class="tele-cell">HDG<br><span class="tele-val" id="t-hdg">---</span> <span style="font-size:8px">°</span></div>
+                <div class="tele-cell">VS<br><span class="tele-val" id="t-vs">---</span> <span style="font-size:8px">FPM</span></div>
+                <div class="tele-cell">PITCH<br><span class="tele-val" id="t-pit">---</span> <span style="font-size:8px">°</span></div>
+                <div class="tele-cell">BANK<br><span class="tele-val" id="t-bnk">---</span> <span style="font-size:8px">°</span></div>
+            </div>
+            <div class="fuel-bar-wrap">
+                <div class="fuel-label"><span>FUEL STATE</span><span id="t-fuel-pct">100%</span></div>
+                <div class="fuel-bar"><div class="fuel-bar-fill" id="t-fuel-bar" style="width:100%"></div></div>
+            </div>
+        </div>
+        <div class="mfd" id="instructor-wrap">
+            <div class="mfd-title"><span>MALFUNCTION INJECTOR</span><span style="color:var(--warn)">⚠ INST CTRL</span></div>
+            <div class="fault-grid">
+                <div class="fault-btn fb-red" onclick="injectFault('engine_fire')">ENG FIRE<br><span style="font-size:7px">WARNING LIGHT</span></div>
+                <div class="fault-btn fb-red" onclick="injectFault('engine_fail')">ENG FAIL<br><span style="font-size:7px">FLAMEOUT</span></div>
+                <div class="fault-btn fb-orange" onclick="injectFault('pitot_block')">PITOT ICE<br><span style="font-size:7px">IAS UNRELIABLE</span></div>
+                <div class="fault-btn fb-orange" onclick="injectFault('gyro_tumble')">GYRO FAIL<br><span style="font-size:7px">ATTITUDE LOSS</span></div>
+                <div class="fault-btn fb-blue" onclick="injectFault('weather_ifr')">IFR COND<br><span style="font-size:7px">VIS&lt;1KM</span></div>
+                <div class="fault-btn fb-blue" onclick="injectFault('weather_turb')">TURBULENCE<br><span style="font-size:7px">SEVERE</span></div>
+                <div class="fault-btn fb-yellow" onclick="injectFault('hydraulic')">HYD FAIL<br><span style="font-size:7px">CTRL DEGRAD</span></div>
+                <div class="fault-btn fb-yellow" onclick="injectFault('elec_fail')">ELEC FAIL<br><span style="font-size:7px">GEN OFFLINE</span></div>
+                <div class="fault-btn fb-gray" onclick="injectFault('birdstrike')">BIRD STRIKE<br><span style="font-size:7px">INGESTION</span></div>
+                <div class="fault-btn fb-green" onclick="injectFault('reset')">RESET ALL<br><span style="font-size:7px">CLEAR FAULTS</span></div>
+            </div>
+            <div style="border-top:1px solid var(--border)">
+                <div class="mfd-title">MISSION CONFIG</div>
+                <div class="mission-row"><span>SCENARIO</span>
+                    <select class="mission-select" id="scenario-sel">
+                        <option value="basic_nav">Basic Navigation</option>
+                        <option value="pattern_work">Pattern Work</option>
+                        <option value="instrument">Instrument Approach</option>
+                        <option value="emergency">Emergency Procedures</option>
+                        <option value="formation">Formation Flying</option>
+                    </select>
+                </div>
+                <div class="mission-row"><span>FUEL (LB)</span><input class="mission-input" id="fuel-set" type="number" value="4500" min="500" max="5500"></div>
+                <div class="mission-row"><span>WIND DIR</span><input class="mission-input" id="wind-dir" type="number" value="270" min="0" max="360"></div>
+                <div class="mission-row"><span>WIND KTS</span><input class="mission-input" id="wind-spd" type="number" value="10" min="0" max="60"></div>
+                <div class="mission-row"><span>INIT ALT</span><input class="mission-input" id="init-alt" type="number" value="5500" min="500" max="35000"></div>
+                <div class="fault-btn fb-green" style="margin:4px;font-size:9px" onclick="applyMission()">▶ APPLY MISSION PARAMS</div>
+            </div>
+        </div>
+        <div class="mfd" id="log-wrap">
+            <div class="mfd-title"><span>MISSION EVENT LOG</span><button onclick="clearLog()" style="background:none;border:none;color:#556;font:8px 'Share Tech Mono';cursor:pointer">CLR</button></div>
+            <div id="event-log"></div>
+        </div>
+    </div>
+
+    <div id="center">
+        <canvas id="three-canvas"></canvas>
+        <div id="cockpit-frame">
+            <svg viewBox="0 0 800 600" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M0,0 L0,600 L130,600 L130,350 Q130,280 200,220 L400,180 L600,220 Q670,280 670,350 L670,600 L800,600 L800,0 Z" fill="rgba(0,5,3,0.4)" stroke="#00ff88" stroke-width="1.2"/>
+                <rect x="370" y="500" width="60" height="100" fill="rgba(0,5,3,0.5)"/>
+                <rect x="0" y="520" width="800" height="80" fill="rgba(0,5,3,0.6)"/>
+                <g stroke="#00ff88" stroke-width="1.2" fill="none" opacity="0.7">
+                    <path d="M240,190 L240,210 L260,210"/>
+                    <path d="M560,190 L560,210 L540,210"/>
+                    <path d="M240,410 L240,390 L260,390"/>
+                    <path d="M560,410 L560,390 L540,390"/>
+                </g>
+                <g stroke="#00ff88" stroke-width="1.5" fill="none" opacity="0.8">
+                    <line x1="385" y1="290" x2="415" y2="290"/>
+                    <line x1="400" y1="275" x2="400" y2="305"/>
+                    <circle cx="400" cy="290" r="15"/>
+                </g>
+            </svg>
+        </div>
+        <div id="hud-overlay">
+            <div class="hdg-tape-wrap">
+                <div class="hdg-tape-box"><div class="hdg-val" id="hud-hdg">120</div><div class="hdg-sub">HDG · MAG</div></div>
+            </div>
+            <div class="tape-area">
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                    <div style="font-size:8px;letter-spacing:2px;color:var(--hud-dim)">IAS</div>
+                    <div class="tape-unit"><div class="tape-scroll" id="spd-tape"></div><div class="tape-index"><span class="tape-bigval" id="hud-spd">320</span></div></div>
+                    <div style="font-size:8px;color:var(--hud-dim)">KTS</div>
+                    <div style="font-size:9px;color:var(--caution)" id="mach-disp">M 0.52</div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                    <div style="font-size:8px;letter-spacing:2px;color:var(--hud-dim)">ATT · HUD</div>
+                    <div class="adi-wrap"><div class="adi-horizon" id="adi-horizon"><div class="adi-sky"></div><div class="adi-ground"></div><div class="adi-horizon-line"></div><div class="adi-pitch-line" style="top:calc(50% - 20%)"></div><div class="adi-pitch-line" style="top:calc(50% - 10%)"></div><div class="adi-pitch-line" style="top:calc(50% + 10%);left:30%;right:30%"></div><div class="adi-pitch-line" style="top:calc(50% + 20%);left:30%;right:30%"></div></div><div class="adi-crosshair"></div><div class="adi-bank-indicator"><div class="adi-bank-arrow" id="adi-bank-arrow"></div></div></div>
+                    <div style="font-size:8px;display:flex;gap:12px"><span>P:<span id="hud-pit" style="color:#fff">+0°</span></span><span>B:<span id="hud-bnk" style="color:#fff">0°</span></span></div>
+                </div>
+                <div style="display:flex;gap:6px;align-items:center">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:4px"><div style="font-size:8px;color:var(--hud-dim)">BARO ALT</div><div class="tape-unit"><div class="tape-scroll alt-tape" id="alt-tape"></div><div class="tape-index"><span class="tape-bigval" id="hud-alt">5500</span></div></div><div style="font-size:8px;color:var(--hud-dim)">FEET</div><div style="font-size:9px;color:var(--hud-dim)" id="fl-disp">FL055</div></div>
+                    <div class="vsi-wrap"><div style="font-size:7px;padding-top:2px;letter-spacing:1px;color:var(--hud-dim)">VSI</div><div class="vsi-label" style="top:20px;">+20</div><div class="vsi-label" style="top:50px;">+10</div><div class="vsi-label" style="top:105px;">0</div><div class="vsi-label" style="top:160px;">-10</div><div class="vsi-label" style="top:190px;">-20</div><div class="vsi-needle" id="vsi-needle"></div><div style="position:absolute;bottom:2px;font-size:7px;">×100</div></div>
+                </div>
+            </div>
+            <div class="hud-bottom">
+                <div class="status-block" id="status-flags"><div class="status-line sl-ok" id="sl-gear">GEAR: UP</div><div class="status-line sl-ok" id="sl-flaps">FLAPS: 0°</div><div class="status-line sl-ok" id="sl-master">MASTER: SAFE</div><div class="status-line sl-ok" id="sl-aoa">AoA: 4.2°</div></div>
+                <div style="display:flex;flex-direction:column;align-items:center;gap:2px"><div style="font-size:8px;letter-spacing:2px;color:var(--hud-dim)">ENG PARAMS</div><div class="eng-row"><div><canvas id="n1-gauge" width="70" height="70"></canvas><div class="arc-label">N1 %</div><div class="arc-val" id="n1-val" style="color:#fff">85</div></div><div><canvas id="egt-gauge" width="70" height="70"></canvas><div class="arc-label">EGT °C</div><div class="arc-val" id="egt-val" style="color:#fff">620</div></div><div><canvas id="n2-gauge" width="70" height="70"></canvas><div class="arc-label">N2 %</div><div class="arc-val" id="n2-val" style="color:#fff">91</div></div></div></div>
+                <div class="status-block" style="align-items:flex-end"><div class="status-line sl-ok" id="sl-nav">NAV: VOR/DME</div><div class="status-line sl-ok" id="sl-comm">COMM: 122.8</div><div class="status-line" style="color:#556;">BRAVE EAGLE · GATS</div><div class="status-line" id="g-readout" style="color:#fff;">G: +1.0</div></div>
+            </div>
+        </div>
+        <div id="annunciator"></div>
+    </div>
+
+    <div id="right-panel">
+        <div class="mfd"><div class="mfd-title">HSI / COMPASS ROSE</div><div class="hsi-wrap"><canvas id="hsi-canvas" width="190" height="190"></canvas><div style="font-size:9px;display:flex;gap:12px"><span>BRG: <span id="hsi-brg" style="color:#fff">---°</span></span><span>DTK: <span id="hsi-dtk" style="color:#fff">120°</span></span></div></div></div>
+        <div class="mfd"><div class="mfd-title">G-METER</div><div class="g-meter-wrap"><canvas id="g-canvas" width="190" height="80"></canvas><div style="display:flex;justify-content:space-around;font-size:9px;margin-top:4px"><span>MAX: <span id="g-max" style="color:var(--warn)">+1.0</span></span><span>CUR: <span id="g-cur" style="color:#fff">+1.0</span></span><span>MIN: <span id="g-min" style="color:#44f">+1.0</span></span></div></div></div>
+        <div class="mfd"><div class="mfd-title">NAV · COMM STACK</div><table class="nav-table"><tr><td>VOR1</td><td id="nav-vor1">112.5</td></tr><tr><td>VOR2</td><td id="nav-vor2">115.0</td></tr><tr><td>ILS</td><td id="nav-ils">109.5</td></tr><tr><td>COMM1</td><td id="nav-c1">122.800</td></tr><tr><td>COMM2</td><td id="nav-c2">121.500</td></tr><tr><td>XPDR</td><td id="nav-xp">7700</td></tr><tr><td>DME</td><td id="nav-dme">--- NM</td></tr></table></div>
+        <div class="mfd"><div class="mfd-title">STUDENT INPUT CTRL</div><div style="padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9px"><div>THR <input type="range" id="ctrl-thr" min="0" max="100" value="75" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div><div>RDR <input type="range" id="ctrl-rdr" min="-100" max="100" value="0" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div><div>PCH <input type="range" id="ctrl-pch" min="-30" max="30" value="0" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div><div>BNK <input type="range" id="ctrl-bnk" min="-90" max="90" value="0" style="width:100%;accent-color:var(--hud)" oninput="ctrlInput()"></div></div><div style="padding:4px 6px;display:flex;gap:4px"><div class="fault-btn fb-gray" style="flex:1" onclick="setFlaps(0)">FLAPS 0</div><div class="fault-btn fb-gray" style="flex:1" onclick="setFlaps(15)">F 15°</div><div class="fault-btn fb-gray" style="flex:1" onclick="setFlaps(30)">F 30°</div></div><div style="padding:4px 6px;display:flex;gap:4px"><div class="fault-btn fb-gray" style="flex:1" onclick="toggleGear()">GEAR ↕</div><div class="fault-btn fb-red" style="flex:1" onclick="toggleArm()">MASTER ARM</div></div></div>
+        <div class="mfd" style="flex:1;min-height:0;display:flex;flex-direction:column;"><div class="mfd-title"><span>CHECKLIST</span><span id="cl-title" style="color:var(--caution)">PRE-TAKEOFF</span></div><div class="checklist-wrap" id="checklist-wrap"></div></div>
+    </div>
+</div>
+
+<script>
+// 飛行狀態 (同原有邏輯，維持暗色儀表與OSM地圖)
+let F = { lat:22.793, lng:120.283, alt:5500, alt_target:5500, spd:320, vs:0, hdg:120, hdg_target:120, pitch:2, roll:0, n1:85, n2:91, egt:620, thrust_pct:75, fuel:4500, fuel_max:4500, g_cur:1.0, g_max:1.0, g_min:1.0, flaps:0, gear:false, arm:false, rudder:0, wind_dir:270, wind_spd:10, turbulence:0, fog:false, fault_engine_fire:false, fault_engine_fail:false, fault_pitot:false, fault_gyro:false, fault_hydraulic:false, fault_elec:false, mach:0.52, aoa:4.2, flight_time:0 };
+let faults_active = {}, annunciators = [];
+
+// THREE.JS 夜間場景
+const canvas3d = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas: canvas3d, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020608);
+scene.fog = new THREE.FogExp2(0x020608, 0.0005);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.1, 8000);
+camera.position.set(0, 60, 0);
+const matGround = new THREE.MeshBasicMaterial({ color: 0x0a1a0a, wireframe: false, side: THREE.DoubleSide });
+const geoGround = new THREE.PlaneGeometry(12000, 12000, 80, 80);
+const meshGround = new THREE.Mesh(geoGround, matGround);
+meshGround.rotation.x = -Math.PI/2; scene.add(meshGround);
+for(let i=0;i<40;i++){ let geo = new THREE.ConeGeometry(Math.random()*180+40, Math.random()*250+80, 8); let mat = new THREE.MeshBasicMaterial({ color: 0x0d1a0d, wireframe: false }); let mesh = new THREE.Mesh(geo, mat); mesh.position.set((Math.random()-0.5)*6000, Math.random()*60, (Math.random()-0.5)*6000); scene.add(mesh); }
+// stars
+const starGeo = new THREE.BufferGeometry(); let starPts = [];
+for(let i=0;i<1800;i++) starPts.push((Math.random()-0.5)*8000, Math.random()*2000+200, (Math.random()-0.5)*8000);
+starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starPts, 3));
+scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x88aacc, size: 1.2 })));
+function buildRunway(){ let rw=new THREE.Group(); let rwBody=new THREE.Mesh(new THREE.PlaneGeometry(60,2800),new THREE.MeshBasicMaterial({color:0x222a1a})); rwBody.rotation.x=-Math.PI/2; rw.add(rwBody); for(let i=-12;i<12;i++){ let cl=new THREE.Mesh(new THREE.PlaneGeometry(4,60),new THREE.MeshBasicMaterial({color:0x446633})); cl.rotation.x=-Math.PI/2; cl.position.set(0,0.1,i*115); rw.add(cl); } rw.position.set(800,1,3000); rw.rotation.y=1.5; scene.add(rw); }
+buildRunway();
+let groundScroll=0;
+function resizeRenderer(){ let el=document.getElementById('center'), w=el.clientWidth, h=el.clientHeight; renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix(); }
+window.addEventListener('resize',resizeRenderer); resizeRenderer();
+
+// OSM 地圖 (標準圖層)
+const map = L.map('map', { zoomControl:false, attributionControl:false }).setView([F.lat,F.lng],11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom:17, attribution: '© OpenStreetMap' }).addTo(map);
+const acIcon = L.divIcon({ html:'<div style="width:12px;height:12px;background:#00ff88;border-radius:50%;border:2px solid white;"></div>', iconSize:[12,12], iconAnchor:[6,6] });
+const acMarker = L.marker([F.lat,F.lng], { icon:acIcon }).addTo(map);
+let trackCoords=[[F.lat,F.lng]], trackLine=L.polyline(trackCoords,{color:'#00aa55',weight:2}).addTo(map);
+// 添加示範航點
+[[22.577,120.350,'RKSS'],[22.900,120.500,'CP01'],[23.100,120.200,'CP02']].forEach(wp=>{ L.circleMarker([wp[0],wp[1]], { color:'#ff8800', radius:4 }).bindTooltip(wp[2]).addTo(map); });
+
+// PeerJS 通訊 (保留原有功能)
+let peer,conn,isInstructor=false,lastTeleTime=Date.now();
+peer=new Peer(); peer.on('open',id=>{ document.getElementById('my-id-display').innerText=`NODE-${id.substring(0,8).toUpperCase()}`; setConnStatus('READY · STANDALONE','status-warn'); logEvent('系統初始化完成 (暗色儀表+OSM)','info'); });
+peer.on('connection',c=>{ conn=c; setupConn(); setConnStatus('UPLINK ● ACTIVE','status-ok'); logEvent('遠端連線已建立','ok'); });
+function connectToPeer(){ let id=document.getElementById('peer-id-input').value.trim(); if(!id)return; conn=peer.connect(id); setConnStatus('LINKING...','status-warn'); setupConn(); }
+function setupConn(){ conn.on('open',()=>{ setConnStatus('UPLINK ● ACTIVE','status-ok'); logEvent('資料鏈結作用中','ok'); }); conn.on('data',data=>{ if(data.type==='tele') updateInstructorTele(data.payload); if(data.type==='cmd') injectFault(data.payload); if(data.type==='ann') showAnnunciator(data.msg,data.level); }); conn.on('close',()=>{ setConnStatus('LINK CLOSED','status-err'); }); }
+function setConnStatus(msg,cls){ let el=document.getElementById('conn-status'); el.innerText=msg; el.className='hdr-val '+cls; }
+function toggleRole(){ isInstructor=!isInstructor; document.getElementById('role-btn').innerText=isInstructor?'▪ STUD MODE':'INST MODE'; logEvent(`模式: ${isInstructor?'教官':'學員'}`,'info'); }
+function sendData(obj){ if(conn&&conn.open) conn.send(obj); }
+
+// 故障注入 (完全保留)
+function injectFault(fault){ if(fault==='reset'){ faults_active={}; F.fault_engine_fire=F.fault_engine_fail=F.fault_pitot=F.fault_gyro=F.fault_hydraulic=F.fault_elec=false; F.turbulence=0; F.fog=false; scene.fog.density=0.0005; clearAnnunciators(); logEvent('所有故障已清除','ok'); sendData({type:'cmd',payload:fault}); return; } faults_active[fault]=true; let msgs={engine_fire:{msg:'🔥 ENGINE FIRE',level:'crit',log:'引擎火警'},engine_fail:{msg:'ENGINE FAILURE',level:'crit',log:'引擎失效'},pitot_block:{msg:'PITOT BLOCKED',level:'warn',log:'皮托管阻塞'},gyro_tumble:{msg:'GYRO FAILURE',level:'warn',log:'姿態儀失效'},weather_ifr:{msg:null,log:'IFR 低能見度'},weather_turb:{msg:'SEVERE TURBULENCE',level:'warn',log:'強烈亂流'},hydraulic:{msg:'HYD PRESS LOW',level:'crit',log:'液壓失效'},elec_fail:{msg:'ELEC GEN FAIL',level:'warn',log:'發電機失效'},birdstrike:{msg:'BIRD STRIKE',level:'crit',log:'鳥擊'}}; let d=msgs[fault]; if(d&&d.msg) addAnnunciator(d.msg,d.level); logEvent(d.log, d.level==='crit'?'crit':'warn'); if(fault==='engine_fail') F.fault_engine_fail=true; if(fault==='engine_fire') F.fault_engine_fire=true; if(fault==='pitot_block') F.fault_pitot=true; if(fault==='gyro_tumble') F.fault_gyro=true; if(fault==='weather_ifr'){ F.fog=true; scene.fog.density=0.025; } if(fault==='weather_turb') F.turbulence=8; if(fault==='hydraulic') F.fault_hydraulic=true; if(fault==='elec_fail') F.fault_elec=true; if(fault==='birdstrike') F.fault_engine_fire=true; sendData({type:'cmd',payload:fault}); }
+function addAnnunciator(msg,level){ let div=document.createElement('div'); div.className='ann-panel'; div.style.borderColor=level==='crit'?'var(--warn)':'var(--caution)'; div.innerText=msg; document.getElementById('annunciator').appendChild(div); if(level!=='crit') setTimeout(()=>div.remove(),8000); }
+function clearAnnunciators(){ document.getElementById('annunciator').innerHTML=''; }
+function showAnnunciator(msg,level){ if(msg) addAnnunciator(msg,level); }
+
+// 任務設定
+function applyMission(){ F.fuel=parseFloat(document.getElementById('fuel-set').value)||4500; F.fuel_max=F.fuel; F.wind_dir=parseFloat(document.getElementById('wind-dir').value)||270; F.wind_spd=parseFloat(document.getElementById('wind-spd').value)||10; F.alt=parseFloat(document.getElementById('init-alt').value)||5500; let sc=document.getElementById('scenario-sel').value; logEvent(`任務套用: ${sc.toUpperCase()} 油量:${F.fuel}lb 風:${F.wind_dir}/${F.wind_spd}kt 高度:${F.alt}ft`,'ok'); loadChecklist(sc); }
+const checklists={ basic_nav:['VOR/DME 調諧','高度表設定','燃油檢查','應答機 ALT','通訊建立','引擎參數正常'], pattern_work:['三邊 1500ft','ASEL 檢查','五邊計時','ILS 識別','VASI 目視','進場速度'], instrument:['儀降圖載入','進場簡報','誤失進場設定','決定高度','高度表撥定','許可'], emergency:['記憶程序','發動機火災','MAYDAY','Squawk 7700','最近跑道','機組提示'], formation:['編隊簡報','無線電測試','編隊速度','翼尖間距','解散口令','長機目視'] };
+function loadChecklist(key){ let items=checklists[key]||checklists.basic_nav; let wrap=document.getElementById('checklist-wrap'); wrap.innerHTML=''; document.getElementById('cl-title').innerText=key.replace('_','-').toUpperCase(); items.forEach(item=>{ let d=document.createElement('div'); d.className='cl-item'; d.innerHTML=`<span>${item}</span><span class="cl-status"></span>`; d.onclick=()=>{ d.classList.toggle('done'); }; wrap.appendChild(d); }); }
+function logEvent(msg,type='info'){ let log=document.getElementById('event-log'); let d=document.createElement('div'); let ts=new Date().toISOString().substring(11,19)+'Z'; d.className={ ok:'log-ok', warn:'log-warn', crit:'log-crit', info:'log-info' }[type]||'log-info'; d.innerText=`[${ts}] ${msg}`; log.appendChild(d); log.scrollTop=log.scrollHeight; }
+function clearLog(){ document.getElementById('event-log').innerHTML=''; }
+function ctrlInput(){ F.thrust_pct=parseFloat(document.getElementById('ctrl-thr').value); F.rudder=parseFloat(document.getElementById('ctrl-rdr').value); F.pitch=parseFloat(document.getElementById('ctrl-pch').value); F.roll=parseFloat(document.getElementById('ctrl-bnk').value); }
+function setFlaps(deg){ F.flaps=deg; document.getElementById('sl-flaps').innerText=`FLAPS: ${deg}°`; document.getElementById('sl-flaps').className='status-line '+(deg>0?'sl-warn':'sl-ok'); logEvent(`襟翼 ${deg}°`,'info'); }
+function toggleGear(){ F.gear=!F.gear; let el=document.getElementById('sl-gear'); el.innerText=`GEAR: ${F.gear?'DOWN ▼':'UP'}`; el.className='status-line '+(F.gear?'sl-warn':'sl-ok'); logEvent(`起落架 ${F.gear?'放下':'收上'}`,'info'); }
+function toggleArm(){ F.arm=!F.arm; let el=document.getElementById('sl-master'); el.innerText=`MASTER: ${F.arm?'⚠ ARMED':'SAFE'}`; el.className='status-line '+(F.arm?'sl-crit':'sl-ok'); logEvent(`武器總電門 ${F.arm?'武裝':'保險'}`,'info'); }
+
+let DT=1/60, flightSeconds=0;
+function updatePhysics(){ flightSeconds+=DT; F.flight_time=flightSeconds; if(F.fault_engine_fail){ F.n1=Math.max(0,F.n1-2*DT*10); F.egt=Math.max(0,F.egt-5); F.thrust_pct=0; } else { let n1_target=F.fault_engine_fire?F.thrust_pct*0.6:F.thrust_pct*0.97; F.n1+=(n1_target-F.n1)*0.05; F.n2=F.n1*1.07; F.egt=350+F.n1*4.5+(F.fault_engine_fire?250:0)+(Math.random()*10); } let drag_factor=1+(F.flaps/30)*0.4+(F.gear?0.3:0); let thrust=(F.n1/100)*400, drag=(F.spd*0.8)*drag_factor, net=(thrust-drag)*DT*0.2; F.spd=Math.max(90,Math.min(550,F.spd+net)); let wdRad=(F.wind_dir-F.hdg)*Math.PI/180, headwind=F.wind_spd*Math.cos(wdRad), eff_spd=F.spd-headwind; F.mach=eff_spd/660; F.aoa=Math.max(-5,Math.min(25,2+(F.pitch*0.5)+(drag_factor*0.5))); if(F.turbulence>0){ F.pitch+=(Math.random()-0.5)*F.turbulence*0.3; F.roll+=(Math.random()-0.5)*F.turbulence*0.5; F.pitch=Math.max(-30,Math.min(30,F.pitch)); F.roll=Math.max(-90,Math.min(90,F.roll)); } let vs_raw=Math.sin(F.pitch*Math.PI/180)*F.spd*1.69*60; F.vs+=(vs_raw-F.vs)*0.05; F.alt=Math.max(0,F.alt+F.vs*DT/60); let g_raw=Math.cos(F.roll*Math.PI/180)+Math.abs(F.pitch)*0.05; F.g_cur+=(g_raw-F.g_cur)*0.1; F.g_max=Math.max(F.g_max,F.g_cur); F.g_min=Math.min(F.g_min,F.g_cur); let turn_rate=(F.spd>0)?Math.tan(F.roll*Math.PI/180)*(1091/F.spd):0; F.hdg=(F.hdg+turn_rate*DT*57.3+360)%360; let speed_mps=eff_spd*0.5144; F.lat+= (speed_mps*Math.cos(F.hdg*Math.PI/180))/111320*DT; F.lng+= (speed_mps*Math.sin(F.hdg*Math.PI/180))/(111320*Math.cos(F.lat*Math.PI/180))*DT; let burn_rate=(F.n1/100)*0.08; F.fuel=Math.max(0,F.fuel-burn_rate*DT); if(F.fuel<=0&&!F.fault_engine_fail){ F.fault_engine_fail=true; addAnnunciator('燃油耗盡 發動機熄火','crit'); logEvent('燃油耗盡','crit'); } if(F.fuel<F.fuel_max*0.15&&!faults_active['low_fuel_warn']){ faults_active['low_fuel_warn']=true; addAnnunciator('燃油低於15%','warn'); } }
+
+function drawArcGauge(id,pct,maxPct,redArc){ let c=document.getElementById(id); if(!c)return; let ctx=c.getContext('2d'),W=c.width,H=c.height; ctx.clearRect(0,0,W,H); let cx=W/2,cy=H/2+5,r=28,startA=Math.PI*0.75,endA=Math.PI*2.25; ctx.beginPath(); ctx.arc(cx,cy,r,startA,endA); ctx.strokeStyle='#1a2e22'; ctx.lineWidth=6; ctx.stroke(); let fraction=Math.min(pct/maxPct,1),valA=startA+fraction*(endA-startA); let color=(redArc&&fraction>redArc)?'#ff4400':fraction>0.85?'#ffaa00':'#00ff88'; ctx.beginPath(); ctx.arc(cx,cy,r,startA,valA); ctx.strokeStyle=color; ctx.lineWidth=6; ctx.stroke(); for(let t=0;t<=5;t++){ let a=startA+(t/5)*(endA-startA); ctx.beginPath(); ctx.moveTo(cx+(r-8)*Math.cos(a),cy+(r-8)*Math.sin(a)); ctx.lineTo(cx+(r+2)*Math.cos(a),cy+(r+2)*Math.sin(a)); ctx.strokeStyle='#334'; ctx.lineWidth=1; ctx.stroke(); } ctx.fillStyle=color; ctx.font='bold 13px Orbitron'; ctx.textAlign='center'; ctx.fillText(Math.floor(pct),cx,cy); }
+function drawHSI(hdg){ let c=document.getElementById('hsi-canvas'); if(!c)return; let ctx=c.getContext('2d'),W=c.width,H=c.height; ctx.clearRect(0,0,W,H); let cx=W/2,cy=H/2,r=86; ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fillStyle='#030603'; ctx.fill(); ctx.strokeStyle='#1a2e22'; ctx.lineWidth=2; ctx.stroke(); ctx.save(); ctx.translate(cx,cy); ctx.rotate(-hdg*Math.PI/180); let cards=['N','3','6','E','12','15','S','21','24','W','30','33']; for(let i=0;i<36;i++){ let a=i*10*Math.PI/180,major=i%3===0; ctx.beginPath(); ctx.moveTo(0,-(r-(major?14:7))); ctx.lineTo(0,-(r-2)); ctx.strokeStyle=major?'#00aa55':'#1a4022'; ctx.lineWidth=major?1.5:1; ctx.stroke(); if(major){ ctx.save(); ctx.rotate(a); ctx.translate(0,-(r-24)); ctx.rotate(-a); ctx.fillStyle=cards[i/3]==='N'?'#ff4400':'#00aa55'; ctx.font=i%9===0?'bold 11px Orbitron':'9px monospace'; ctx.fillText(cards[i/3],0,0); ctx.restore(); } ctx.rotate(10*Math.PI/180); } ctx.restore(); ctx.strokeStyle='#ffff00'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy-20); ctx.lineTo(cx,cy+20); ctx.stroke(); ctx.beginPath(); ctx.moveTo(cx-16,cy); ctx.lineTo(cx+16,cy); ctx.stroke(); ctx.beginPath(); ctx.arc(cx,cy,4,0,Math.PI*2); ctx.fillStyle='#ffff00'; ctx.fill(); }
+function drawGMeter(cur,mx,mn){ let c=document.getElementById('g-canvas'); if(!c)return; let ctx=c.getContext('2d'),W=c.width,H=c.height; ctx.clearRect(0,0,W,H); let cx=W/2,cy=H-10,r=65,minG=-3,maxG=9,gToAngle=g=>Math.PI+(g-minG)/(maxG-minG)*Math.PI; ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,2*Math.PI); ctx.strokeStyle='#1a2e22'; ctx.lineWidth=10; ctx.stroke(); ctx.beginPath(); ctx.arc(cx,cy,r,gToAngle(6),gToAngle(9)); ctx.strokeStyle='#330000'; ctx.lineWidth=10; ctx.stroke(); let a0=gToAngle(1),aCur=gToAngle(Math.max(minG,Math.min(maxG,cur))); ctx.beginPath(); ctx.arc(cx,cy,r,Math.min(a0,aCur),Math.max(a0,aCur)); ctx.strokeStyle=cur>5?'#ff4400':cur>3?'#ffaa00':'#00ff88'; ctx.lineWidth=10; ctx.stroke(); for(let g=minG;g<=maxG;g++){ let a=gToAngle(g); ctx.beginPath(); ctx.moveTo(cx+(r-14)*Math.cos(a),cy+(r-14)*Math.sin(a)); ctx.lineTo(cx+(r+2)*Math.cos(a),cy+(r+2)*Math.sin(a)); ctx.strokeStyle='#334'; ctx.stroke(); ctx.fillStyle='#556'; ctx.font='8px monospace'; ctx.fillText(g,cx+(r-24)*Math.cos(a),cy+(r-24)*Math.sin(a)); } let aMx=gToAngle(Math.max(minG,Math.min(maxG,mx))); ctx.beginPath(); ctx.moveTo(cx+(r-8)*Math.cos(aMx),cy+(r-8)*Math.sin(aMx)); ctx.lineTo(cx+r*Math.cos(aMx),cy+r*Math.sin(aMx)); ctx.strokeStyle='#ff4400'; ctx.lineWidth=2; ctx.stroke(); let aMn=gToAngle(Math.max(minG,Math.min(maxG,mn))); ctx.beginPath(); ctx.moveTo(cx+(r-8)*Math.cos(aMn),cy+(r-8)*Math.sin(aMn)); ctx.lineTo(cx+r*Math.cos(aMn),cy+r*Math.sin(aMn)); ctx.strokeStyle='#4444ff'; ctx.lineWidth=2; ctx.stroke(); ctx.save(); ctx.translate(cx,cy); ctx.rotate(aCur-Math.PI/2); ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(0,-(r-4)); ctx.lineTo(3,0); ctx.fillStyle='#fff'; ctx.fill(); ctx.restore(); ctx.beginPath(); ctx.arc(cx,cy,5,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); }
+
+function buildTapes(){ let spdTape=document.getElementById('spd-tape'),altTape=document.getElementById('alt-tape'); for(let i=60;i>=0;i--){ let v=i*20,ds=document.createElement('div'); ds.style.cssText='height:40px;font-size:9px;display:flex;align-items:center;justify-content:flex-end;padding-right:4px;color:'+(v%100===0?'#00ff88':'#224'); ds.innerText=v%100===0?v:(v%50===0?'·':''); spdTape.appendChild(ds); let da=document.createElement('div'); da.style.cssText='height:40px;font-size:9px;display:flex;align-items:center;justify-content:flex-start;padding-left:4px;color:'+((60-i)*500%1000===0?'#00ff88':'#224'); let av=(60-i)*500; da.innerText=av%1000===0?av:(av%500===0?'·':''); altTape.appendChild(da); } }
+buildTapes();
+
+function updateInstructorTele(data){ document.getElementById('t-spd').innerText=Math.floor(data.spd); document.getElementById('t-alt').innerText=Math.floor(data.alt); document.getElementById('t-hdg').innerText=Math.floor(data.hdg); document.getElementById('t-vs').innerText=(data.vs>0?'+':'')+Math.floor(data.vs); document.getElementById('t-pit').innerText=(data.pitch>0?'+':'')+data.pitch.toFixed(1); document.getElementById('t-bnk').innerText=data.roll.toFixed(1); let fp=Math.floor((data.fuel/data.fuel_max)*100); document.getElementById('t-fuel-pct').innerText=fp+'%'; let bar=document.getElementById('t-fuel-bar'); bar.style.width=fp+'%'; bar.style.background=fp<15?'#ff4400':fp<30?'#ffaa00':'#00ff88'; acMarker.setLatLng([data.lat,data.lng]); trackCoords.push([data.lat,data.lng]); if(trackCoords.length>500)trackCoords.shift(); trackLine.setLatLngs(trackCoords); map.panTo([data.lat,data.lng]); let lag=Date.now()-lastTeleTime; document.getElementById('tele-lag').innerText=`LAG: ${lag}ms`; }
+
+function updateClocks(){ let z=new Date(); document.getElementById('zulu-clock').innerText=z.getUTCHours().toString().padStart(2,'0')+':'+z.getUTCMinutes().toString().padStart(2,'0')+':'+z.getUTCSeconds().toString().padStart(2,'0')+'Z'; let ft=Math.floor(F.flight_time); document.getElementById('flight-timer').innerText=`${Math.floor(ft/3600).toString().padStart(2,'0')}:${Math.floor((ft%3600)/60).toString().padStart(2,'0')}:${(ft%60).toString().padStart(2,'0')}`; }
+
+let frame=0;
+function animate(){ requestAnimationFrame(animate); frame++; updatePhysics(); let pitchRad=-F.pitch*Math.PI/180, rollRad=F.roll*Math.PI/180; camera.rotation.order='YXZ'; camera.rotation.y=-F.hdg*Math.PI/180; camera.rotation.x=pitchRad*0.8; camera.rotation.z=-rollRad*0.3; let spd3d=F.spd/40; groundScroll+=spd3d*DT; meshGround.position.set(-Math.sin(F.hdg*Math.PI/180)*(groundScroll%200),0,-Math.cos(F.hdg*Math.PI/180)*(groundScroll%200)); renderer.render(scene,camera); let pitot_ok=!F.fault_pitot; document.getElementById('hud-hdg').innerText=Math.floor(F.hdg).toString().padStart(3,'0'); document.getElementById('hud-spd').innerText=pitot_ok?Math.floor(F.spd):'---'; document.getElementById('hud-alt').innerText=Math.floor(F.alt); document.getElementById('hud-pit').innerText=(F.pitch>=0?'+':'')+F.pitch.toFixed(1)+'°'; document.getElementById('hud-bnk').innerText=F.roll.toFixed(1)+'°'; document.getElementById('mach-disp').innerText=`M ${F.mach.toFixed(2)}`; document.getElementById('fl-disp').innerText='FL'+Math.floor(F.alt/100).toString().padStart(3,'0'); document.getElementById('g-readout').innerText=`G: ${F.g_cur>=0?'+':''}${F.g_cur.toFixed(1)}`; document.getElementById('sl-aoa').innerText=`AoA: ${F.aoa.toFixed(1)}°`; document.getElementById('spd-tape').style.transform=`translateY(${-(F.spd/20)*40+110}px)`; document.getElementById('alt-tape').style.transform=`translateY(${-(F.alt/500)*40+110}px)`; if(!F.fault_gyro){ document.getElementById('adi-horizon').style.transform=`rotate(${F.roll}deg) translateY(${-F.pitch*2}px)`; document.getElementById('adi-bank-arrow').style.transform=`rotate(${F.roll}deg)`; } let vsi_frac=Math.max(-1,Math.min(1,F.vs/2000)); document.getElementById('vsi-needle').style.transform=`rotate(${vsi_frac*70}deg)`; drawArcGauge('n1-gauge',F.n1,110,0.95); drawArcGauge('egt-gauge',F.egt,950,0.92); drawArcGauge('n2-gauge',F.n2,110,0.97); document.getElementById('n1-val').innerText=Math.floor(F.n1); document.getElementById('egt-val').innerText=Math.floor(F.egt); document.getElementById('n2-val').innerText=Math.floor(F.n2); if(frame%2===0) drawHSI(F.hdg); if(frame%3===0) drawGMeter(F.g_cur,F.g_max,F.g_min); document.getElementById('g-max').innerText=(F.g_max>=0?'+':'')+F.g_max.toFixed(1); document.getElementById('g-cur').innerText=(F.g_cur>=0?'+':'')+F.g_cur.toFixed(1); document.getElementById('g-min').innerText=(F.g_min>=0?'+':'')+F.g_min.toFixed(1); let fp2=(F.fuel/F.fuel_max)*100; document.getElementById('t-fuel-pct').innerText=Math.floor(fp2)+'%'; document.getElementById('t-fuel-bar').style.width=fp2+'%'; if(frame%60===0) updateClocks(); if(frame%6===0){ sendData({type:'tele',payload:{spd:F.spd,alt:F.alt,hdg:F.hdg,vs:F.vs,pitch:F.pitch,roll:F.roll,fuel:F.fuel,fuel_max:F.fuel_max,lat:F.lat,lng:F.lng,g:F.g_cur}}); } if(frame%30===0){ acMarker.setLatLng([F.lat,F.lng]); trackCoords.push([F.lat,F.lng]); if(trackCoords.length>500)trackCoords.shift(); trackLine.setLatLngs(trackCoords); } }
+updateClocks(); setInterval(updateClocks,1000); animate();
+document.addEventListener('keydown',e=>{ let thr=document.getElementById('ctrl-thr'),pch=document.getElementById('ctrl-pch'),bnk=document.getElementById('ctrl-bnk'); switch(e.key){ case 'ArrowUp': pch.value=Math.min(30,parseFloat(pch.value)+2); ctrlInput(); break; case 'ArrowDown': pch.value=Math.max(-30,parseFloat(pch.value)-2); ctrlInput(); break; case 'ArrowLeft': bnk.value=Math.max(-90,parseFloat(bnk.value)-5); ctrlInput(); break; case 'ArrowRight': bnk.value=Math.min(90,parseFloat(bnk.value)+5); ctrlInput(); break; case '+': case '=': thr.value=Math.min(100,parseFloat(thr.value)+5); ctrlInput(); break; case '-': thr.value=Math.max(0,parseFloat(thr.value)-5); ctrlInput(); break; case 'g': case 'G': toggleGear(); break; case ' ': pch.value=0; bnk.value=0; ctrlInput(); break; } e.preventDefault(); });
+logEvent('T-BE5 暗色儀表 + OSM地圖模式 — 系統就緒','ok');
+loadChecklist('basic_nav');
+</script>
+</body>
+</html>
