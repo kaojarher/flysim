@@ -2319,8 +2319,17 @@ function updateMobileView() {
         mobCamera3d.rotation.y = -F.hdg * Math.PI / 180;
         mobCamera3d.rotation.x = pitchRad * 0.8;
         mobCamera3d.rotation.z = -rollRad * 0.3;
-        tileGroup.position.copy(scene.children[0] ? new THREE.Vector3() : new THREE.Vector3());
-        // reuse tileGroup positioning from main loop — just render
+        // Sync tileGroup world position with aircraft lat/lng (same as main desktop loop)
+        const acTileMob = latLngToTile(F.lat, F.lng, SAT_ZOOM);
+        const dTileXMob = acTileMob.x - refTile.x;
+        const dTileYMob = acTileMob.y - refTile.y;
+        const refNWMob  = tileToLatLng(acTileMob.x,     acTileMob.y,     SAT_ZOOM);
+        const nextNWMob = tileToLatLng(acTileMob.x + 1, acTileMob.y + 1, SAT_ZOOM);
+        const fracXMob  = (F.lng - refNWMob.lng)  / (nextNWMob.lng - refNWMob.lng);
+        const fracYMob  = (refNWMob.lat - F.lat)  / (refNWMob.lat  - nextNWMob.lat);
+        const worldXMob = (dTileXMob + fracXMob) * TILE_WORLD;
+        const worldZMob = (dTileYMob + fracYMob) * TILE_WORLD;
+        tileGroup.position.set(-worldXMob, 0, -worldZMob);
         mobRenderer3d.render(scene, mobCamera3d);
     }
 
