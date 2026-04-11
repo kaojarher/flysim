@@ -194,8 +194,10 @@
             #mob-map2d   { width: 100%; height: 100%; }
 
             /* ── 2. 3D VIEW ── */
-            #mob-3d-sec  { height: 30vh; overflow: hidden; background: #050807; }
+            #mob-3d-sec  { height: 30vh; overflow: hidden; background: #050807; position: relative; }
             #mob-3d-canvas { width: 100% !important; height: 100% !important; display: block; }
+            #mob-hud-overlay { display: flex; }
+            #mob-mission-hint { min-height: 54px; }
 
             /* ── 3. THROTTLE + GAUGES ── */
             #mob-thr-sec {
@@ -298,6 +300,10 @@
                 letter-spacing: 1px; text-align: center;
             }
 
+            /* wrapper cols — portrait: stack vertically, full width */
+            #mob-left-col  { display: flex; flex-direction: column; width: 100%; flex-shrink: 0; }
+            #mob-right-col { display: flex; flex-direction: column; width: 100%; flex-shrink: 0; }
+
             /* instructor on mobile → left panel scrollable */
             body.instructor-mode #mob-scroll  { display: none !important; }
             body.instructor-mode #main        { display: flex !important; flex-direction: column; }
@@ -306,7 +312,207 @@
             body.instructor-mode #right-panel { display: none !important; }
         }
 
-        @media (max-width: 900px) and (min-width: 601px) {
+        /* ══════════════════════════════════════
+           MOBILE LANDSCAPE  (height ≤ 500px, e.g. Xperia 10 II rotated)
+           Two-column layout:
+             Left  40%  → stacked 2D map (top) + 3D view (bottom)
+             Right 60%  → throttle bar | joystick | rudder
+        ══════════════════════════════════════ */
+        @media (orientation: landscape) and (max-height: 500px) {
+
+            body { overflow: hidden; height: 100vh; }
+
+            /* compact header */
+            #header { height: 28px; padding: 0 6px; gap: 6px; flex-shrink: 0; }
+            .sys-title  { font-size: 8px; letter-spacing: 1px; }
+            .sep        { height: 14px; }
+            .hdr-field  { display: none; }
+            #hdr-node-wrap { display: flex !important; }
+            .hdr-label  { font-size: 6px; }
+            .hdr-val    { font-size: 8px; }
+            #conn-status{ font-size: 7px; }
+            #role-badge { font-size: 6px; padding: 1px 4px; }
+            .hdr-right  { gap: 4px; }
+            .hdr-btn    { padding: 2px 6px; font-size: 7px; }
+
+            /* kill desktop panels */
+            #right-panel   { display: none !important; }
+            #left-panel    { display: none !important; }
+            #main          { display: none !important; }
+            #mob-tabbar    { display: none !important; }
+            #mob-ctrl-pane { display: none !important; }
+            #touch-overlay { display: none !important; }
+
+            /* override mob-scroll to horizontal two-column */
+            #mob-scroll {
+                display: flex !important;
+                flex-direction: row !important;
+                flex: 1;
+                overflow: hidden;
+                background: var(--bg);
+            }
+
+            /* ── LEFT COLUMN: 2D map + 3D view stacked ── */
+            #mob-map-sec {
+                width: 40%;
+                height: 50%;
+                flex-shrink: 0;
+                border-bottom: 1px solid var(--border);
+                border-right: none;
+                position: relative;
+            }
+            #mob-map2d { width: 100%; height: 100%; }
+
+            #mob-3d-sec {
+                width: 40%;
+                height: 50%;
+                flex-shrink: 0;
+                overflow: hidden;
+                background: #050807;
+                border-right: none;
+                position: relative;
+            }
+            #mob-3d-canvas { width: 100% !important; height: 100% !important; display: block; }
+            /* Compact HUD in landscape (less vertical space) */
+            #mob-hud-overlay { display: flex; padding: 2px 4px; }
+            .mhud-val { font-size: 11px; }
+            .mhud-hdg { font-size: 13px; }
+            #mob-adi-wrap { width: 56px; height: 56px; }
+            #mob-mission-hint { min-height: 56px; font-size: 7px; }
+
+            /* wrap the two left sections into a column */
+            #mob-map-sec, #mob-3d-sec {
+                position: static;
+            }
+
+            /* ── RIGHT COLUMN: throttle + joy stacked ── */
+            #mob-thr-sec {
+                flex: 1;
+                height: auto;
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                padding: 4px 6px;
+                gap: 6px;
+                background: #080e0b;
+                border-bottom: 1px solid var(--border);
+                overflow: hidden;
+            }
+
+            /* vertical throttle bar — keep same */
+            #mob-thr-bar-wrap {
+                display: flex; flex-direction: column;
+                align-items: center; gap: 2px; flex-shrink: 0; width: 32px;
+            }
+            #mob-thr-bar-track {
+                width: 14px; height: 56px;
+                background: #040906; border: 1px solid var(--border);
+                border-radius: 3px; position: relative; overflow: hidden;
+            }
+            #mob-thr-bar-fill {
+                position: absolute; bottom: 0; left: 0; right: 0;
+                background: linear-gradient(to top, var(--hud), #00aa55);
+                transition: height .1s;
+            }
+            #mob-thr-input {
+                position: absolute; inset: -10px;
+                opacity: 0; cursor: pointer; touch-action: none;
+                writing-mode: vertical-lr; direction: rtl;
+                -webkit-appearance: slider-vertical;
+            }
+            .mob-thr-lbl { font: 7px 'Share Tech Mono'; color: var(--hud-dim); letter-spacing: 1px; }
+            #mob-thr-pct { font: bold 8px 'Orbitron'; color: var(--hud); }
+
+            /* mini readout: 2-column to save height */
+            .mob-readout-grid {
+                display: grid; grid-template-columns: 1fr 1fr;
+                gap: 2px; flex: 1; align-self: stretch; padding: 2px 0;
+            }
+            .mob-readout-cell {
+                background: #040906; border: 1px solid #111;
+                padding: 2px 3px; display: flex; flex-direction: column;
+                justify-content: center;
+            }
+            .mob-readout-lbl { font-size: 6px; color: #445; letter-spacing: 0; }
+            .mob-readout-val { font: bold 11px 'Orbitron'; color: #fff; }
+
+            /* quick buttons: horizontal row */
+            .mob-quick-btns {
+                display: flex; flex-direction: column; gap: 2px;
+                flex-shrink: 0; width: 46px;
+            }
+            .mob-quick-btn {
+                font: 7px 'Share Tech Mono'; padding: 5px 2px;
+                border: 1px solid #333; color: #aaa; background: #111;
+                cursor: pointer; text-align: center;
+                -webkit-tap-highlight-color: transparent;
+            }
+            .mob-quick-btn:active { background: #333; }
+            .mob-quick-btn.red   { border-color: #622; color: #f44; background: #1a0000; }
+            .mob-quick-btn.green { border-color: #262; color: #0f0; background: #001400; }
+
+            /* ── JOYSTICK section fills remaining right height ── */
+            #mob-joy-sec {
+                flex: 1;
+                min-height: 0;
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-around;
+                padding: 4px 10px;
+                background: #020403;
+            }
+
+            #mob-joy-col { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+            #mob-joy-pad {
+                width: 100px; height: 100px; border-radius: 50%;
+                border: 2px solid rgba(0,255,136,0.3);
+                background: radial-gradient(circle, rgba(0,255,136,0.07) 0%, transparent 70%);
+                position: relative; touch-action: none; flex-shrink: 0;
+            }
+            #mob-joy-knob2 {
+                width: 36px; height: 36px; border-radius: 50%;
+                background: rgba(0,255,136,0.3); border: 2px solid var(--hud);
+                position: absolute; top: 50%; left: 50%;
+                transform: translate(-50%,-50%);
+                box-shadow: 0 0 8px rgba(0,255,136,0.4);
+            }
+
+            #mob-rdr-col {
+                display: flex; flex-direction: column;
+                align-items: center; gap: 4px; flex-shrink: 0;
+            }
+            #mob-rdr2 { width: 80px; accent-color: var(--caution); }
+            #mob-level-btn {
+                font: 8px 'Share Tech Mono'; padding: 5px 10px;
+                border: 1px solid var(--hud-dim); color: var(--hud-dim);
+                background: transparent; letter-spacing: 1px; cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+            }
+            #mob-level-btn:active { background: #1a2e22; }
+            .mob-joy-lbl {
+                font: 6px 'Share Tech Mono'; color: #334;
+                letter-spacing: 1px; text-align: center;
+            }
+
+            /* left panel wrapper for landscape */
+            #mob-left-col {
+                width: 40%; display: flex; flex-direction: column; flex-shrink: 0;
+                border-right: 1px solid var(--border);
+            }
+            #mob-right-col {
+                flex: 1; display: flex; flex-direction: column; overflow: hidden;
+            }
+
+            /* instructor on mobile landscape → same as portrait */
+            body.instructor-mode #mob-scroll  { display: none !important; }
+            body.instructor-mode #main        { display: flex !important; flex-direction: column; }
+            body.instructor-mode #left-panel  { display: flex !important; width: 100% !important; overflow-y: auto; flex: 1; }
+            body.instructor-mode #center      { display: none !important; }
+            body.instructor-mode #right-panel { display: none !important; }
+        }
+
+        @media (max-width: 900px) and (min-width: 601px) and (orientation: portrait) {
             body.student-mode  #left-panel { width: 260px; }
             body.instructor-mode #left-panel { width: 280px; }
         }
@@ -662,10 +868,110 @@
         .cl-item.done .cl-status::after { content: 'COMPL'; color: var(--hud); }
         .cl-item:not(.done) .cl-status::after { content: 'PNDG'; color: var(--caution); }
 
-        /* Scrollbar global */
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: #000; }
-        ::-webkit-scrollbar-thumb { background: var(--border); }
+        /* ──── MOBILE HUD OVERLAY (on 3D canvas) ──── */
+        #mob-hud-overlay {
+            position: absolute; inset: 0; z-index: 10; pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+            padding: 4px 6px 4px;
+        }
+        #mob-hud-top, #mob-hud-bot {
+            display: flex; justify-content: space-between; align-items: flex-start;
+        }
+        #mob-hud-bot { align-items: flex-end; }
+        .mhud-cell {
+            display: flex; flex-direction: column; align-items: flex-start;
+            background: rgba(0,0,0,0.55); padding: 2px 5px; border-left: 2px solid var(--hud);
+            min-width: 44px;
+        }
+        .mhud-lbl  { font: 6px 'Share Tech Mono'; color: var(--hud-dim); letter-spacing: 1px; }
+        .mhud-val  { font: bold 13px 'Orbitron'; color: #fff; line-height: 1; }
+        .mhud-unit { font: 6px 'Share Tech Mono'; color: #446; }
+        .mhud-hdg-box {
+            background: rgba(0,0,0,0.65); padding: 2px 8px;
+            border: 1px solid var(--hud); text-align: center;
+            border-top: none; align-self: flex-start;
+        }
+        .mhud-hdg  { font: bold 16px 'Orbitron'; color: var(--hud); }
+
+        /* mini ADI */
+        #mob-hud-mid {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 6px; padding: 0 4px;
+        }
+        #mob-adi-wrap {
+            width: 70px; height: 70px; border: 1px solid var(--hud);
+            border-radius: 2px; overflow: hidden; position: relative; flex-shrink: 0;
+            background: #000;
+        }
+        #mob-adi-horizon {
+            position: absolute; width: 200%; height: 200%;
+            top: -50%; left: -50%;
+            transition: transform .06s linear;
+        }
+        #mob-adi-sky    { width: 100%; height: 50%; background: #4da6e8; }
+        #mob-adi-ground { width: 100%; height: 50%; background: #8b6914; }
+        #mob-adi-hline  {
+            position: absolute; top: 50%; left: 0; right: 0;
+            height: 2px; background: #fff; margin-top: -1px;
+        }
+        #mob-adi-cross {
+            position: absolute; inset: 0; pointer-events: none;
+        }
+        #mob-adi-cross::before {
+            content: ''; position: absolute;
+            left: 10px; right: 10px; top: 50%; height: 2px; background: #ff0;
+        }
+        #mob-adi-cross::after {
+            content: ''; position: absolute;
+            left: 50%; top: 35%; bottom: 35%; width: 2px; background: #ff0; margin-left: -1px;
+        }
+        #mob-adi-bank-row {
+            position: absolute; bottom: 3px; left: 0; right: 0;
+            display: flex; justify-content: center;
+        }
+        #mob-adi-bank-arrow {
+            width: 0; height: 0;
+            border-left: 5px solid transparent; border-right: 5px solid transparent;
+            border-bottom: 8px solid #ff0; transition: transform .06s linear;
+        }
+
+        /* mission hint */
+        #mob-mission-hint {
+            flex: 1; background: rgba(0,0,0,0.6);
+            border: 1px solid #1a2e22; border-radius: 2px;
+            padding: 3px 6px; min-height: 70px;
+            display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+        }
+        #mob-mission-text {
+            font: 8px 'Share Tech Mono'; color: var(--caution);
+            letter-spacing: 1px; line-height: 1.4; flex: 1;
+        }
+        #mob-ann-mini {
+            font: bold 8px 'Orbitron'; color: var(--warn);
+            animation: blink .4s infinite; white-space: pre-line;
+        }
+
+        /* ──── MULTI-STUDENT map markers ──── */
+        .student-marker-label {
+            background: rgba(0,0,0,0.75);
+            border: 1px solid #ffaa00;
+            color: #ffaa00;
+            font: bold 9px 'Share Tech Mono';
+            padding: 1px 4px;
+            border-radius: 2px;
+            white-space: nowrap;
+        }
+        /* Remove default Leaflet tooltip styling for student labels */
+        .leaflet-tooltip-plain {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            color: inherit !important;
+            font: inherit !important;
+        }
+        .leaflet-tooltip-plain::before { display: none !important; }
+
     </style>
 </head>
 <body>
@@ -674,6 +980,15 @@
 <div id="role-splash">
     <div class="splash-title">T-BE5 · 勇鷹<br>地面輔助訓練系統</div>
     <div class="splash-sub">BRAVE EAGLE · GROUND ASSISTED TRAINING SYSTEM · v3.0</div>
+    <div class="splash-sep"></div>
+    <!-- Callsign input (shown for student, optional for instructor) -->
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;width:100%">
+        <div class="splash-sub" style="color:#667">呼號 · CALLSIGN <span style="color:#334">(可選)</span></div>
+        <input id="callsign-input" class="modal-input"
+            type="text" maxlength="8" placeholder="例：EAGLE-1"
+            style="text-transform:uppercase;letter-spacing:3px;width:min(220px,80vw);text-align:center"
+            oninput="this.value=this.value.toUpperCase().replace(/[^A-Z0-9\-]/g,'')">
+    </div>
     <div class="splash-sep"></div>
     <div class="splash-sub" style="color:#556">選擇角色 · SELECT ROLE</div>
     <div class="role-btns">
@@ -763,6 +1078,10 @@
         <!-- Telemetry -->
         <div class="mfd" id="tele-wrap">
             <div class="mfd-title"><span>TELEMETRY FEED</span><span id="tele-lag" style="color:#556">LAG: ---</span></div>
+            <!-- Multi-student roster -->
+            <div id="student-roster" style="padding:4px 8px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:4px;min-height:22px">
+                <span style="font:8px 'Share Tech Mono';color:#334;align-self:center">學員:</span>
+            </div>
             <div class="tele-grid">
                 <div class="tele-cell">GS<br><span class="tele-val" id="t-spd">---</span> <span style="font-size:8px">KTS</span></div>
                 <div class="tele-cell">ALT<br><span class="tele-val" id="t-alt">---</span> <span style="font-size:8px">FT</span></div>
@@ -1047,17 +1366,82 @@
 ══════════════════════════════════════ -->
 <div id="mob-scroll" style="display:none; flex-direction:column; flex:1; overflow-y:auto;">
 
-    <!-- ① 2D Satellite Map -->
-    <div class="mob-section" id="mob-map-sec">
-        <div class="mob-sec-label">① 2D 衛星地圖 · TAD</div>
-        <div id="mob-map2d"></div>
-    </div>
+    <!-- LEFT COLUMN (portrait: full width; landscape: 40%) -->
+    <div id="mob-left-col">
+        <!-- ① 2D Satellite Map -->
+        <div class="mob-section" id="mob-map-sec">
+            <div class="mob-sec-label">① 2D 衛星地圖 · TAD</div>
+            <div id="mob-map2d"></div>
+        </div>
 
-    <!-- ② 3D Cockpit View -->
-    <div class="mob-section" id="mob-3d-sec">
-        <div class="mob-sec-label">② 3D 座艙視角</div>
-        <canvas id="mob-3d-canvas"></canvas>
-    </div>
+        <!-- ② 3D Cockpit View -->
+        <div class="mob-section" id="mob-3d-sec">
+            <div class="mob-sec-label">② 3D 座艙視角</div>
+            <canvas id="mob-3d-canvas"></canvas>
+
+            <!-- ── Mini HUD overlay (portrait + landscape) ── -->
+            <div id="mob-hud-overlay">
+                <!-- Top bar: HDG / SPD / ALT -->
+                <div id="mob-hud-top">
+                    <div class="mhud-cell">
+                        <div class="mhud-lbl">SPD</div>
+                        <div class="mhud-val" id="mhud-spd">---</div>
+                        <div class="mhud-unit">KTS</div>
+                    </div>
+                    <div class="mhud-hdg-box">
+                        <div class="mhud-lbl">HDG</div>
+                        <div class="mhud-hdg" id="mhud-hdg">---°</div>
+                    </div>
+                    <div class="mhud-cell" style="align-items:flex-end">
+                        <div class="mhud-lbl">ALT</div>
+                        <div class="mhud-val" id="mhud-alt">---</div>
+                        <div class="mhud-unit">FT</div>
+                    </div>
+                </div>
+
+                <!-- Centre: mini ADI -->
+                <div id="mob-hud-mid">
+                    <div id="mob-adi-wrap">
+                        <div id="mob-adi-horizon">
+                            <div id="mob-adi-sky"></div>
+                            <div id="mob-adi-ground"></div>
+                            <div id="mob-adi-hline"></div>
+                        </div>
+                        <div id="mob-adi-cross"></div>
+                        <div id="mob-adi-bank-row">
+                            <div id="mob-adi-bank-arrow"></div>
+                        </div>
+                    </div>
+                    <!-- Mission hint (right of ADI) -->
+                    <div id="mob-mission-hint">
+                        <div class="mhud-lbl">任務提示</div>
+                        <div id="mob-mission-text">—</div>
+                        <div id="mob-ann-mini"></div>
+                    </div>
+                </div>
+
+                <!-- Bottom: VS / G / callsign -->
+                <div id="mob-hud-bot">
+                    <div class="mhud-cell">
+                        <div class="mhud-lbl">V/S</div>
+                        <div class="mhud-val" id="mhud-vs">---</div>
+                        <div class="mhud-unit">FPM</div>
+                    </div>
+                    <div class="mhud-cell" style="align-items:center">
+                        <div class="mhud-lbl">G</div>
+                        <div class="mhud-val" id="mhud-g">+1.0</div>
+                    </div>
+                    <div class="mhud-cell" style="align-items:flex-end">
+                        <div class="mhud-lbl">呼號</div>
+                        <div class="mhud-val" id="mhud-cs" style="font-size:9px;color:#ffaa00">---</div>
+                    </div>
+                </div>
+            </div><!-- /#mob-hud-overlay -->
+        </div>
+    </div><!-- /#mob-left-col -->
+
+    <!-- RIGHT COLUMN (portrait: full width below; landscape: flex:1) -->
+    <div id="mob-right-col">
 
     <!-- ③ Throttle + Key Gauges -->
     <div class="mob-section" id="mob-thr-sec">
@@ -1130,7 +1514,9 @@
             <button id="mob-level-btn" ontouchstart="event.preventDefault();mobLevel2()">⬛ LEVEL</button>
             <div class="mob-joy-lbl" id="mob-status-lbl" style="margin-top:4px;color:var(--hud-dim)">GEAR: UP</div>
         </div>
-    </div>
+    </div><!-- /#mob-joy-sec -->
+
+    </div><!-- /#mob-right-col -->
 
 </div><!-- /#mob-scroll -->
 <script>
@@ -1357,8 +1743,13 @@ waypoints.forEach(wp => {
 let peer, conn;
 let currentRole = null; // 'instructor' | 'student'
 let myPeerId = null;
+let myCallsign = 'EAGLE';
 let lastTeleTime = Date.now();
 let qrGenerated = false;
+
+// ── Multi-student support (instructor side) ──
+let studentConns = {};      // peerId → { conn, callsign, marker, trackLine, trackCoords, teleData }
+let activeAnnunciators = {}; // fault key → bool, prevents duplicate popups on student side
 
 // ── Toast helper ──
 function showToast(msg) {
@@ -1408,12 +1799,13 @@ function toggleQR() {
 
 // ── Role selection ──
 function selectRole(role) {
+    myCallsign = (document.getElementById('callsign-input').value.trim() || (role === 'instructor' ? 'INST' : 'EAGLE'));
     currentRole = role;
     document.getElementById('role-splash').style.display = 'none';
 
     if (role === 'instructor') {
         document.body.classList.add('instructor-mode');
-        document.getElementById('role-badge').innerText = 'INST';
+        document.getElementById('role-badge').innerText = 'INST · ' + myCallsign;
         document.getElementById('role-badge').className = 'badge-inst';
         document.getElementById('left-panel').style.display = 'flex';
         document.getElementById('instructor-wrap').style.display = 'block';
@@ -1423,15 +1815,15 @@ function selectRole(role) {
         initPeer('instructor');
     } else {
         document.body.classList.add('student-mode');
-        document.getElementById('role-badge').innerText = 'STUD';
+        document.getElementById('role-badge').innerText = 'STUD · ' + myCallsign;
         document.getElementById('role-badge').className = 'badge-stud';
         // Hide instructor-only panels
         document.getElementById('instructor-wrap').style.display = 'none';
         document.getElementById('tele-wrap').style.display = 'none';
         // Show student connect modal
         document.getElementById('connect-modal').classList.add('show');
-        // Mobile: show scroll view for student
-        if (window.innerWidth <= 600) {
+        // Mobile
+        if (isMobileDevice()) {
             setTimeout(() => initMobileAfterRole('student'), 400);
         }
         initPeer('student');
@@ -1473,16 +1865,17 @@ function initPeer(role) {
         document.getElementById('inst-id-display').innerText = id;
         setConnStatus('READY · STANDALONE', 'status-warn');
         logEvent('系統初始化完成 · Standalone mode.', 'info');
-
-        if (role === 'instructor') {
-            // Auto show share modal for instructor
-            showInstModal();
-        }
+        if (role === 'instructor') showInstModal();
     });
+
     peer.on('connection', c => {
-        conn = c; setupConn();
-        setConnStatus('UPLINK ● ACTIVE', 'status-ok');
-        logEvent('學員已連線 Uplink established.', 'ok');
+        // Instructor: accept multiple student connections
+        if (currentRole === 'instructor') {
+            setupStudentConn(c);
+        } else {
+            conn = c; setupConn();
+        }
+        setConnStatus(`UPLINK ● ${Object.keys(studentConns).length + 1} STU`, 'status-ok');
         closeInstModal();
     });
     peer.on('error', e => {
@@ -1491,21 +1884,125 @@ function initPeer(role) {
     });
 }
 
+// ── Instructor: handle one student connection ──
+function setupStudentConn(c) {
+    const pid = c.peer;
+    studentConns[pid] = { conn: c, callsign: pid.substring(0,6), marker: null, trackLine: null, trackCoords: [], teleData: null };
+
+    c.on('open', () => {
+        logEvent(`學員連線: ${pid.substring(0,8)}`, 'ok');
+        updateConnStatusInst();
+    });
+    c.on('data', data => {
+        lastTeleTime = Date.now();
+        if (data.type === 'hello') {
+            if (data.callsign) {
+                studentConns[pid].callsign = data.callsign;
+                logEvent(`學員呼號確認: ${data.callsign}`, 'ok');
+                updateStudentRoster();
+            }
+        }
+        if (data.type === 'tele') {
+            // Update callsign if provided
+            if (data.callsign) studentConns[pid].callsign = data.callsign;
+            studentConns[pid].teleData = data.payload;
+            updateStudentOnMap(pid, data.payload, studentConns[pid].callsign);
+            // Show last-connected student telemetry in panel
+            updateInstructorTele(data.payload);
+        }
+    });
+    c.on('close', () => {
+        removeStudentFromMap(pid);
+        delete studentConns[pid];
+        logEvent(`學員斷線: ${pid.substring(0,8)}`, 'warn');
+        updateConnStatusInst();
+    });
+}
+
+function updateConnStatusInst() {
+    const n = Object.keys(studentConns).length;
+    setConnStatus(n > 0 ? `UPLINK ● ${n} STU` : 'READY · STANDALONE', n > 0 ? 'status-ok' : 'status-warn');
+    updateStudentRoster();
+}
+
+function updateStudentRoster() {
+    const roster = document.getElementById('student-roster');
+    if (!roster) return;
+    // Keep the label span
+    roster.innerHTML = '<span style="font:8px \'Share Tech Mono\';color:#334;align-self:center">學員:</span>';
+    Object.values(studentConns).forEach(stu => {
+        const chip = document.createElement('span');
+        chip.style.cssText = `background:${stu.color||'#ffaa00'}22;border:1px solid ${stu.color||'#ffaa00'};color:${stu.color||'#ffaa00'};font:bold 8px 'Share Tech Mono';padding:1px 6px;border-radius:2px;letter-spacing:1px`;
+        chip.innerText = stu.callsign;
+        roster.appendChild(chip);
+    });
+}
+
+// Student-side connection to instructor
 function setupConn() {
     conn.on('open', () => {
         setConnStatus('UPLINK ● ACTIVE', 'status-ok');
         logEvent('Data link active.', 'ok');
+        // Send callsign immediately
+        conn.send({ type: 'hello', callsign: myCallsign });
     });
     conn.on('data', data => {
         lastTeleTime = Date.now();
-        if (data.type === 'tele')   updateInstructorTele(data.payload);
-        if (data.type === 'cmd')    handleCommand(data.payload);
-        if (data.type === 'ann')    showAnnunciator(data.msg, data.level);
+        if (data.type === 'cmd')  handleCommand(data.payload, data.faultKey);
+        if (data.type === 'ann')  showAnnunciator(data.msg, data.level, data.faultKey);
+        if (data.type === 'mission_hint') setMissionHint(data.text);
     });
     conn.on('close', () => {
         setConnStatus('LINK CLOSED', 'status-err');
         logEvent('Data link closed.', 'crit');
     });
+}
+
+// ── Student map markers (instructor side) ──
+const studentColors = ['#ffaa00','#ff6688','#44aaff','#aaffaa','#ff8844','#cc88ff'];
+let studentColorIdx = 0;
+
+function updateStudentOnMap(pid, payload, callsign) {
+    if (!studentConns[pid]) return;
+    const stu = studentConns[pid];
+    if (!stu.marker) {
+        // First appearance — create marker + track
+        const color = studentColors[studentColorIdx++ % studentColors.length];
+        stu.color = color;
+        const icon = L.divIcon({
+            html: `<div style="width:12px;height:12px;background:${color};border-radius:50%;border:2px solid white;box-shadow:0 0 6px ${color}"></div>`,
+            iconSize: [12,12], iconAnchor: [6,6]
+        });
+        stu.marker = L.marker([payload.lat, payload.lng], { icon }).addTo(map);
+        stu.marker.bindTooltip(`<span class="student-marker-label">${callsign}</span>`, { permanent: true, direction: 'top', offset: [0,-10], className: 'leaflet-tooltip-plain', opacity: 1 });
+        stu.trackLine = L.polyline([[payload.lat, payload.lng]], { color, weight: 2, opacity: 0.7 }).addTo(map);
+        stu.trackCoords = [[payload.lat, payload.lng]];
+    } else {
+        stu.marker.setLatLng([payload.lat, payload.lng]);
+        stu.marker.setTooltipContent(`<span class="student-marker-label">${callsign}</span>`);
+        stu.trackCoords.push([payload.lat, payload.lng]);
+        if (stu.trackCoords.length > 400) stu.trackCoords.shift();
+        stu.trackLine.setLatLngs(stu.trackCoords);
+    }
+    // Also update in mobile map if present
+    if (mobMap2d && stu.mobMarker) {
+        stu.mobMarker.setLatLng([payload.lat, payload.lng]);
+    } else if (mobMap2d && !stu.mobMarker) {
+        const icon2 = L.divIcon({
+            html: `<div style="width:10px;height:10px;background:${stu.color||'#ffaa00'};border-radius:50%;border:1px solid white"></div>`,
+            iconSize:[10,10],iconAnchor:[5,5]
+        });
+        stu.mobMarker = L.marker([payload.lat,payload.lng],{icon:icon2}).addTo(mobMap2d);
+        stu.mobMarker.bindTooltip(callsign,{permanent:true,direction:'top',offset:[0,-8]});
+    }
+}
+
+function removeStudentFromMap(pid) {
+    const stu = studentConns[pid];
+    if (!stu) return;
+    if (stu.marker) map.removeLayer(stu.marker);
+    if (stu.trackLine) map.removeLayer(stu.trackLine);
+    if (stu.mobMarker && mobMap2d) mobMap2d.removeLayer(stu.mobMarker);
 }
 
 function setConnStatus(msg, cls) {
@@ -1516,8 +2013,16 @@ function setConnStatus(msg, cls) {
 
 function toggleRole() { /* legacy stub */ }
 
+// Instructor: broadcast to all connected students
 function sendData(obj) {
-    if (conn && conn.open) conn.send(obj);
+    if (currentRole === 'instructor') {
+        Object.values(studentConns).forEach(stu => {
+            if (stu.conn && stu.conn.open) stu.conn.send(obj);
+        });
+    } else {
+        // Student: send to instructor
+        if (conn && conn.open) conn.send(obj);
+    }
 }
 
 // ════════════════════════════════════════
@@ -1526,6 +2031,7 @@ function sendData(obj) {
 function injectFault(fault) {
     if (fault === 'reset') {
         faults_active = {};
+        activeAnnunciators = {};
         F.fault_engine_fire = F.fault_engine_fail = F.fault_pitot = false;
         F.fault_gyro = F.fault_hydraulic = F.fault_elec = false;
         F.turbulence = 0; F.fog = false;
@@ -1533,7 +2039,8 @@ function injectFault(fault) {
         scene.fog.color.set(0x020608);
         clearAnnunciators();
         logEvent('ALL FAULTS CLEARED — System reset.', 'ok');
-        sendData({ type: 'cmd', payload: fault });
+        // Broadcast reset to all students
+        sendData({ type: 'cmd', payload: 'reset', faultKey: 'reset' });
         return;
     }
 
@@ -1551,10 +2058,32 @@ function injectFault(fault) {
     };
     const d = msgs[fault];
     if (!d) return;
-    if (d.msg) addAnnunciator(d.msg, d.level);
+    // Show on instructor side too
+    if (d.msg) addAnnunciator(d.msg, d.level, fault);
     logEvent(d.log, d.level === 'crit' ? 'crit' : 'warn');
 
-    // Apply state effects
+    // Apply state effects (instructor sees them locally too)
+    _applyFaultState(fault);
+
+    // Broadcast to ALL students with faultKey to prevent duplicates
+    sendData({ type: 'cmd', payload: fault, faultKey: fault });
+    if (d.msg) sendData({ type: 'ann', msg: d.msg, level: d.level, faultKey: fault });
+    // Also send mission hint for the scenario
+    const hints = {
+        engine_fire:  '🔥 發動機火警程序：\n1. 油門收小\n2. 確認火警燈\n3. 執行緊急程序',
+        engine_fail:  '⚡ 發動機停車：\n1. 維持滑翔速度\n2. 嘗試重啟\n3. 宣告緊急',
+        pitot_block:  '🌡 空速管阻塞：\n1. 勿信任 IAS\n2. 改用 AOA/GPS\n3. 保持姿態飛行',
+        gyro_tumble:  '⚠ 陀螺失效：\n1. 勿信任姿態指示\n2. 改用磁羅盤/VSI\n3. 保持翼平',
+        weather_ifr:  '🌫 IMC 條件：\n1. 維持儀器飛行\n2. 請求雷達引導\n3. 確認備降場',
+        weather_turb: '💨 嚴重亂流：\n1. 減速至穿透速度\n2. 保持姿態\n3. 通報 ATC',
+        hydraulic:    '⚙ 液壓失壓：\n1. 操控加重屬正常\n2. 延長落地修正量\n3. 備用放輪',
+        elec_fail:    '🔋 電力故障：\n1. 切換電瓶\n2. 減少電氣負載\n3. 就近降落',
+        birdstrike:   '🦅 鳥擊/吸入：\n1. 確認發動機狀態\n2. 如火警→執行程序\n3. 宣告緊急',
+    };
+    if (hints[fault]) sendData({ type: 'mission_hint', text: hints[fault] });
+}
+
+function _applyFaultState(fault) {
     if (fault === 'engine_fail') { F.fault_engine_fail = true; }
     if (fault === 'engine_fire') { F.fault_engine_fire = true; }
     if (fault === 'pitot_block') { F.fault_pitot = true; }
@@ -1564,20 +2093,38 @@ function injectFault(fault) {
     if (fault === 'hydraulic') { F.fault_hydraulic = true; }
     if (fault === 'elec_fail') { F.fault_elec = true; }
     if (fault === 'birdstrike') { F.fault_engine_fire = true; F.turbulence = 5; }
-
-    sendData({ type: 'cmd', payload: fault });
-    sendData({ type: 'ann', msg: d.msg, level: d.level });
 }
 
-function handleCommand(cmd) {
-    injectFault(cmd);
+function handleCommand(cmd, faultKey) {
+    if (cmd === 'reset') {
+        faults_active = {};
+        activeAnnunciators = {};
+        F.fault_engine_fire = F.fault_engine_fail = F.fault_pitot = false;
+        F.fault_gyro = F.fault_hydraulic = F.fault_elec = false;
+        F.turbulence = 0; F.fog = false;
+        scene.fog.density = 0.0005;
+        scene.fog.color.set(0x020608);
+        clearAnnunciators();
+        setMissionHint('');
+        return;
+    }
+    // Dedup: only apply each fault once per session
+    const key = faultKey || cmd;
+    if (activeAnnunciators[key]) return;
+    activeAnnunciators[key] = true;
+    faults_active[cmd] = true;
+    _applyFaultState(cmd);
 }
 
 // Annunciator panel
-function addAnnunciator(msg, level) {
+function addAnnunciator(msg, level, faultKey) {
+    // Dedup: never show the same fault annunciator twice
+    if (faultKey && activeAnnunciators[faultKey]) return;
+    if (faultKey) activeAnnunciators[faultKey] = true;
+
     const container = document.getElementById('annunciator');
-    // Remove oldest if already 4 showing
-    if (container.children.length >= 4) {
+    // Keep max 3 (not 4) to avoid screen clutter
+    while (container.children.length >= 3) {
         container.removeChild(container.firstChild);
     }
     const id = 'ann_' + Date.now();
@@ -1591,15 +2138,32 @@ function addAnnunciator(msg, level) {
     div.innerText = msg;
     container.appendChild(div);
     if (level !== 'crit') setTimeout(() => { if (div.parentNode) div.remove(); }, 8000);
+
+    // Also update mobile mini-annunciator
+    const mini = document.getElementById('mob-ann-mini');
+    if (mini) {
+        mini.innerText = msg;
+        mini.style.color = level === 'crit' ? 'var(--warn)' : 'var(--caution)';
+        if (level !== 'crit') setTimeout(() => { if (mini.innerText === msg) mini.innerText = ''; }, 8000);
+    }
 }
 
 function clearAnnunciators() {
     document.getElementById('annunciator').innerHTML = '';
     annunciators = [];
+    activeAnnunciators = {};
+    const mini = document.getElementById('mob-ann-mini');
+    if (mini) mini.innerText = '';
 }
 
-function showAnnunciator(msg, level) {
-    if (msg) addAnnunciator(msg, level);
+function showAnnunciator(msg, level, faultKey) {
+    if (msg) addAnnunciator(msg, level, faultKey);
+}
+
+// Mission hint setter
+function setMissionHint(text) {
+    const el = document.getElementById('mob-mission-text');
+    if (el) el.innerText = text || '—';
 }
 
 // ════════════════════════════════════════
@@ -2105,10 +2669,11 @@ function animate() {
     // Mobile view update (map pan + 3D render + readout)
     if (frame % 10 === 0) updateMobileView();
 
-    // Telemetry send (10 Hz)
+    // Telemetry send (10 Hz) — include callsign for multi-student map
     if (frame % 6 === 0) {
         sendData({
             type: 'tele',
+            callsign: myCallsign,
             payload: {
                 spd: F.spd, alt: F.alt, hdg: F.hdg, vs: F.vs,
                 pitch: F.pitch, roll: F.roll, fuel: F.fuel, fuel_max: F.fuel_max,
@@ -2162,7 +2727,7 @@ let mobTrackCoords = [];
 let mobTrackLine = null;
 
 function initMobileView() {
-    if (window.innerWidth > 600) return;
+    if (!isMobileDevice()) return;
 
     // Show scroll container
     const scroll = document.getElementById('mob-scroll');
@@ -2181,6 +2746,7 @@ function initMobileView() {
             iconSize: [14, 14], iconAnchor: [7, 7]
         });
         mobMapMarker = L.marker([F.lat, F.lng], { icon: acIconMob }).addTo(mobMap2d);
+        mobMapMarker.bindTooltip(myCallsign || 'YOU', { permanent: true, direction: 'top', offset: [0,-10] });
         mobTrackCoords = [[F.lat, F.lng]];
         mobTrackLine = L.polyline(mobTrackCoords, { color: '#ffdd00', weight: 2, opacity: 0.9 }).addTo(mobMap2d);
 
@@ -2299,8 +2865,13 @@ function initMobJoy2() {
 }
 
 // Mobile render + readout update (called from main animate loop)
+function isMobileDevice() {
+    // portrait ≤600px wide, OR landscape with height ≤500px (e.g. Xperia 10 II rotated)
+    return window.innerWidth <= 600 || (window.innerHeight <= 500 && window.innerWidth <= 960);
+}
+
 function updateMobileView() {
-    if (window.innerWidth > 600) return;
+    if (!isMobileDevice()) return;
 
     // 2D map
     if (mobMap2d && mobMapMarker) {
@@ -2319,7 +2890,6 @@ function updateMobileView() {
         mobCamera3d.rotation.y = -F.hdg * Math.PI / 180;
         mobCamera3d.rotation.x = pitchRad * 0.8;
         mobCamera3d.rotation.z = -rollRad * 0.3;
-        // Sync tileGroup world position with aircraft lat/lng (same as main desktop loop)
         const acTileMob = latLngToTile(F.lat, F.lng, SAT_ZOOM);
         const dTileXMob = acTileMob.x - refTile.x;
         const dTileYMob = acTileMob.y - refTile.y;
@@ -2333,14 +2903,32 @@ function updateMobileView() {
         mobRenderer3d.render(scene, mobCamera3d);
     }
 
-    // Readout
+    // ── Mini HUD overlay update ──
     const sv = (id, v) => { const el = document.getElementById(id); if (el) el.innerText = v; };
+    sv('mhud-spd', F.fault_pitot ? '---' : Math.floor(F.spd));
+    sv('mhud-alt', Math.floor(F.alt));
+    sv('mhud-hdg', Math.floor(F.hdg).toString().padStart(3,'0') + '°');
+    sv('mhud-vs',  (F.vs > 0 ? '+' : '') + Math.floor(F.vs));
+    sv('mhud-g',   (F.g_cur >= 0 ? '+' : '') + F.g_cur.toFixed(1));
+    sv('mhud-cs',  myCallsign);
+
+    // Mini ADI
+    const gyro_ok = !F.fault_gyro;
+    if (gyro_ok) {
+        const adi = document.getElementById('mob-adi-horizon');
+        if (adi) adi.style.transform = `rotate(${F.roll}deg) translateY(${-F.pitch * 1.2}px)`;
+        const arr = document.getElementById('mob-adi-bank-arrow');
+        if (arr) arr.style.transform = `rotate(${F.roll}deg)`;
+    }
+
+    // Old readout section (keep synced too)
     sv('mr-spd', Math.floor(F.spd));
     sv('mr-alt', Math.floor(F.alt));
     sv('mr-hdg', Math.floor(F.hdg).toString().padStart(3,'0'));
     sv('mr-g',   (F.g_cur >= 0 ? '+' : '') + F.g_cur.toFixed(1));
     sv('mr-n1',  Math.floor(F.n1) + '%');
     sv('mr-vs',  (F.vs > 0 ? '+' : '') + Math.floor(F.vs));
+
     // gear status label
     const lbl = document.getElementById('mob-status-lbl');
     if (lbl) lbl.innerText = `GEAR: ${F.gear ? 'DN' : 'UP'} · FLP: ${F.flaps}°`;
@@ -2348,7 +2936,7 @@ function updateMobileView() {
 
 // selectRole hook: init mobile after role chosen
 function initMobileAfterRole(role) {
-    if (window.innerWidth > 600) return;
+    if (!isMobileDevice()) return;
     if (role === 'student') {
         setTimeout(initMobileView, 400);
     }
@@ -2360,6 +2948,26 @@ function mobRdr(v)   { mobRdrUpdate(v); }
 function mobLevel()  { mobLevel2(); }
 function updateMobReadout() { updateMobileView(); }
 function mobTab()    {}
+
+// ── Handle device rotation ──
+function onOrientationChange() {
+    if (!isMobileDevice()) return;
+    setTimeout(() => {
+        // Resize Leaflet map
+        if (mobMap2d) mobMap2d.invalidateSize(true);
+        // Resize 3D canvas
+        if (mobRenderer3d && mobCamera3d) {
+            const sec = document.getElementById('mob-3d-sec');
+            if (sec && sec.clientWidth > 0 && sec.clientHeight > 0) {
+                mobRenderer3d.setSize(sec.clientWidth, sec.clientHeight);
+                mobCamera3d.aspect = sec.clientWidth / sec.clientHeight;
+                mobCamera3d.updateProjectionMatrix();
+            }
+        }
+    }, 350); // wait for browser to finish reflow
+}
+window.addEventListener('orientationchange', onOrientationChange);
+window.addEventListener('resize', onOrientationChange);
 
 
 </script>
