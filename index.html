@@ -134,28 +134,35 @@
 
         /* ══════════════════════════════════════
            MOBILE PORTRAIT  ≤ 600px
-           Single-scroll layout top → bottom:
-             1. 2D satellite map   ~36vh
-             2. 3D cockpit view    ~30vh
-             3. Throttle+gauges    120px
-             4. Joystick+rudder    remaining
+           Fixed-height layout — NO scroll, NO overflow
+             1. 2D satellite map   30vh
+             2. 3D cockpit view    26vh
+             3. Throttle+gauges    96px
+             4. Joystick+rudder    remaining (flex:1)
         ══════════════════════════════════════ */
         @media (max-width: 600px) {
 
-            body { overflow: hidden; height: 100vh; }
+            html, body {
+                width: 100%; max-width: 100%;
+                height: 100%; max-height: 100vh;
+                overflow: hidden;
+                margin: 0; padding: 0;
+            }
+
+            body { display: flex; flex-direction: column; }
 
             /* compact header */
-            #header { height: 34px; padding: 0 8px; gap: 8px; flex-shrink: 0; }
-            .sys-title  { font-size: 9px; letter-spacing: 2px; }
-            .sep        { height: 16px; }
+            #header { height: 30px; padding: 0 6px; gap: 6px; flex-shrink: 0; }
+            .sys-title  { font-size: 8px; letter-spacing: 2px; }
+            .sep        { height: 14px; }
             .hdr-field  { display: none; }
             #hdr-node-wrap { display: flex !important; }
-            .hdr-label  { font-size: 7px; }
-            .hdr-val    { font-size: 9px; }
-            #conn-status{ font-size: 8px; }
-            #role-badge { font-size: 7px; padding: 1px 5px; }
-            .hdr-right  { gap: 4px; }
-            .hdr-btn    { padding: 3px 7px; font-size: 8px; }
+            .hdr-label  { font-size: 6px; }
+            .hdr-val    { font-size: 8px; }
+            #conn-status{ font-size: 7px; }
+            #role-badge { font-size: 6px; padding: 1px 4px; }
+            .hdr-right  { gap: 3px; }
+            .hdr-btn    { padding: 2px 6px; font-size: 7px; }
 
             /* kill desktop panels */
             #right-panel       { display: none !important; }
@@ -165,15 +172,27 @@
             #mob-ctrl-pane     { display: none !important; }
             #touch-overlay     { display: none !important; }
 
-            /* single-scroll container */
+            /* mob-scroll: fixed column, fills remaining height exactly */
             #mob-scroll {
                 display: flex !important;
                 flex-direction: column;
                 flex: 1;
-                overflow-y: auto;
-                overflow-x: hidden;
-                -webkit-overflow-scrolling: touch;
+                min-height: 0;
+                overflow: hidden !important; /* NO scroll at all */
+                width: 100%;
+                max-width: 100%;
                 background: var(--bg);
+            }
+
+            /* wrapper cols — portrait: full width column */
+            #mob-left-col  {
+                display: flex; flex-direction: column;
+                width: 100%; flex-shrink: 0;
+            }
+            #mob-right-col {
+                display: flex; flex-direction: column;
+                flex: 1; min-height: 0;
+                width: 100%;
             }
 
             /* section shared */
@@ -181,39 +200,43 @@
                 width: 100%; flex-shrink: 0;
                 position: relative;
                 border-bottom: 1px solid var(--border);
+                box-sizing: border-box;
             }
             .mob-sec-label {
                 position: absolute; top: 0; left: 0; right: 0; z-index: 5;
-                font: 8px 'Share Tech Mono'; letter-spacing: 2px;
+                font: 7px 'Share Tech Mono'; letter-spacing: 2px;
                 color: var(--hud-dim); background: rgba(0,0,0,0.55);
-                padding: 2px 8px; pointer-events: none;
+                padding: 2px 6px; pointer-events: none;
             }
 
-            /* ── 1. 2D MAP ── */
-            #mob-map-sec { height: 36vh; }
+            /* ── 1. 2D MAP — 30vh ── */
+            #mob-map-sec { height: 30vh; }
             #mob-map2d   { width: 100%; height: 100%; }
 
-            /* ── 2. 3D VIEW ── */
-            #mob-3d-sec  { height: 30vh; overflow: hidden; background: #050807; position: relative; }
+            /* ── 2. 3D VIEW — 26vh ── */
+            #mob-3d-sec  { height: 26vh; overflow: hidden; background: #050807; position: relative; }
             #mob-3d-canvas { width: 100% !important; height: 100% !important; display: block; }
             #mob-hud-overlay { display: flex; }
-            #mob-mission-hint { min-height: 54px; }
+            #mob-mission-hint { min-height: 44px; }
 
-            /* ── 3. THROTTLE + GAUGES ── */
+            /* ── 3. THROTTLE + GAUGES — 96px ── */
             #mob-thr-sec {
-                height: 120px;
+                height: 96px;
+                flex-shrink: 0;
                 display: flex; align-items: center;
-                padding: 4px 8px; gap: 6px;
+                padding: 3px 6px; gap: 5px;
                 background: #080e0b;
+                box-sizing: border-box;
+                width: 100%;
             }
 
             /* vertical throttle bar */
             #mob-thr-bar-wrap {
                 display: flex; flex-direction: column;
-                align-items: center; gap: 2px; flex-shrink: 0; width: 38px;
+                align-items: center; gap: 2px; flex-shrink: 0; width: 32px;
             }
             #mob-thr-bar-track {
-                width: 16px; height: 72px;
+                width: 14px; height: 58px;
                 background: #040906; border: 1px solid var(--border);
                 border-radius: 3px; position: relative; overflow: hidden;
             }
@@ -228,29 +251,30 @@
                 writing-mode: vertical-lr; direction: rtl;
                 -webkit-appearance: slider-vertical;
             }
-            .mob-thr-lbl { font: 8px 'Share Tech Mono'; color: var(--hud-dim); letter-spacing: 1px; }
-            #mob-thr-pct { font: bold 10px 'Orbitron'; color: var(--hud); }
+            .mob-thr-lbl { font: 7px 'Share Tech Mono'; color: var(--hud-dim); letter-spacing: 1px; }
+            #mob-thr-pct { font: bold 9px 'Orbitron'; color: var(--hud); }
 
             /* mini readout grid */
             .mob-readout-grid {
                 display: grid; grid-template-columns: 1fr 1fr 1fr;
-                gap: 3px; flex: 1; align-self: stretch; padding: 4px 0;
+                gap: 2px; flex: 1; align-self: stretch; padding: 2px 0;
+                min-width: 0;
             }
             .mob-readout-cell {
                 background: #040906; border: 1px solid #111;
-                padding: 3px 4px; display: flex; flex-direction: column;
-                justify-content: center;
+                padding: 2px 3px; display: flex; flex-direction: column;
+                justify-content: center; min-width: 0;
             }
-            .mob-readout-lbl { font-size: 7px; color: #445; letter-spacing: 1px; }
-            .mob-readout-val { font: bold 13px 'Orbitron'; color: #fff; }
+            .mob-readout-lbl { font-size: 6px; color: #445; letter-spacing: 0; white-space: nowrap; }
+            .mob-readout-val { font: bold 11px 'Orbitron'; color: #fff; }
 
             /* quick buttons */
             .mob-quick-btns {
-                display: flex; flex-direction: column; gap: 3px;
-                flex-shrink: 0; width: 54px;
+                display: flex; flex-direction: column; gap: 2px;
+                flex-shrink: 0; width: 46px;
             }
             .mob-quick-btn {
-                font: 8px 'Share Tech Mono'; padding: 7px 2px;
+                font: 7px 'Share Tech Mono'; padding: 5px 2px;
                 border: 1px solid #333; color: #aaa; background: #111;
                 cursor: pointer; text-align: center;
                 -webkit-tap-highlight-color: transparent;
@@ -259,23 +283,27 @@
             .mob-quick-btn.red   { border-color: #622; color: #f44; background: #1a0000; }
             .mob-quick-btn.green { border-color: #262; color: #0f0; background: #001400; }
 
-            /* ── 4. JOYSTICK ── */
+            /* ── 4. JOYSTICK — flex:1 fills remaining ── */
             #mob-joy-sec {
-                flex: 1; min-height: 130px;
+                flex: 1;
+                min-height: 0;
                 display: flex; align-items: center; justify-content: space-around;
-                padding: 8px 16px;
+                padding: 4px 12px;
                 background: #020403;
+                width: 100%;
+                box-sizing: border-box;
+                overflow: hidden;
             }
 
-            #mob-joy-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+            #mob-joy-col { display: flex; flex-direction: column; align-items: center; gap: 3px; }
             #mob-joy-pad {
-                width: 116px; height: 116px; border-radius: 50%;
+                width: 100px; height: 100px; border-radius: 50%;
                 border: 2px solid rgba(0,255,136,0.3);
                 background: radial-gradient(circle, rgba(0,255,136,0.07) 0%, transparent 70%);
                 position: relative; touch-action: none; flex-shrink: 0;
             }
             #mob-joy-knob2 {
-                width: 42px; height: 42px; border-radius: 50%;
+                width: 36px; height: 36px; border-radius: 50%;
                 background: rgba(0,255,136,0.3); border: 2px solid var(--hud);
                 position: absolute; top: 50%; left: 50%;
                 transform: translate(-50%,-50%);
@@ -284,11 +312,11 @@
 
             #mob-rdr-col {
                 display: flex; flex-direction: column;
-                align-items: center; gap: 6px; flex-shrink: 0;
+                align-items: center; gap: 5px; flex-shrink: 0;
             }
-            #mob-rdr2 { width: 90px; accent-color: var(--caution); }
+            #mob-rdr2 { width: 80px; accent-color: var(--caution); }
             #mob-level-btn {
-                font: 9px 'Share Tech Mono'; padding: 7px 12px;
+                font: 8px 'Share Tech Mono'; padding: 6px 10px;
                 border: 1px solid var(--hud-dim); color: var(--hud-dim);
                 background: transparent; letter-spacing: 2px; cursor: pointer;
                 -webkit-tap-highlight-color: transparent;
@@ -296,13 +324,9 @@
             #mob-level-btn:active { background: #1a2e22; }
 
             .mob-joy-lbl {
-                font: 7px 'Share Tech Mono'; color: #334;
+                font: 6px 'Share Tech Mono'; color: #334;
                 letter-spacing: 1px; text-align: center;
             }
-
-            /* wrapper cols — portrait: stack vertically, full width */
-            #mob-left-col  { display: flex; flex-direction: column; width: 100%; flex-shrink: 0; }
-            #mob-right-col { display: flex; flex-direction: column; width: 100%; flex-shrink: 0; }
 
             /* instructor on mobile → left panel scrollable */
             body.instructor-mode #mob-scroll  { display: none !important; }
@@ -2824,12 +2848,14 @@ function initMobJoy2() {
     const knob = document.getElementById('mob-joy-knob2');
     if (!pad || !knob) return;
 
-    const R = 52;
+    // R = usable radius; read from actual rendered size so portrait/landscape both work
+    let R = 46;
     let ox = 0, oy = 0, active = false;
 
     pad.addEventListener('touchstart', e => {
         e.preventDefault();
         const rect = pad.getBoundingClientRect();
+        R = rect.width / 2 - 4; // dynamic radius from actual rendered size
         ox = rect.left + rect.width / 2;
         oy = rect.top  + rect.height / 2;
         active = true;
